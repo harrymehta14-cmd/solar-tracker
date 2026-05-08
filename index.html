@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar Material Tracker — Waaree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   CONFIG — PASTE YOUR APPS SCRIPT URL BELOW
+   ═══════════════════════════════════════════ */
+/* See SCRIPT_URL variable in JS section below */
+
+:root {
+  --bg:        #0A0E1A;
+  --bg2:       #111827;
+  --bg3:       #1C2333;
+  --border:    #2A3347;
+  --border2:   #374260;
+  --accent:    #F59E0B;
+  --accent2:   #FBBF24;
+  --blue:      #3B82F6;
+  --green:     #10B981;
+  --red:       #EF4444;
+  --text:      #F1F5F9;
+  --text2:     #94A3B8;
+  --text3:     #64748B;
+  --mono:      'IBM Plex Mono', monospace;
+  --sans:      'IBM Plex Sans', sans-serif;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── GRID BACKGROUND ── */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(245,158,11,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,158,11,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events:none; z-index:0;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  position:sticky; top:0; z-index:100;
+  background: rgba(10,14,26,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 0 24px; height: 56px;
+}
+.topbar-brand {
+  display:flex; align-items:center; gap:10px;
+}
+.brand-icon {
+  width:32px; height:32px;
+  background: linear-gradient(135deg, var(--accent), #D97706);
+  border-radius:6px;
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--mono); font-size:14px; font-weight:600; color:#000;
+}
+.brand-name {
+  font-family: var(--mono); font-size:13px; font-weight:600;
+  color: var(--text); letter-spacing:1px;
+}
+.brand-sub {
+  font-size:10px; color:var(--text3); letter-spacing:1px;
+  text-transform:uppercase;
+}
+.topbar-nav {
+  display:flex; gap:4px;
+}
+.nav-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius:6px;
+  color: var(--text2);
+  font-family: var(--mono); font-size:11px; font-weight:500;
+  cursor:pointer; transition: all 0.15s;
+  letter-spacing:0.5px;
+}
+.nav-btn:hover { color:var(--text); border-color:var(--border2); }
+.nav-btn.active {
+  background: rgba(245,158,11,0.12);
+  border-color: rgba(245,158,11,0.3);
+  color: var(--accent);
+}
+.topbar-right { display:flex; align-items:center; gap:12px; }
+.admin-badge {
+  font-family:var(--mono); font-size:10px; padding:3px 10px;
+  background: rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3);
+  border-radius:20px; color:#93C5FD; letter-spacing:0.5px;
+  cursor:pointer;
+}
+.status-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* ── MAIN ── */
+main { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:28px 20px 60px; }
+
+/* ── SCREENS ── */
+.screen { display:none; }
+.screen.active { display:block; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── SECTION HEADER ── */
+.section-header { margin-bottom:24px; }
+.section-title {
+  font-family:var(--mono); font-size:18px; font-weight:600;
+  color:var(--text); margin-bottom:4px;
+}
+.section-sub { font-size:13px; color:var(--text3); }
+
+/* ── CARD ── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius:12px;
+  padding:20px;
+  margin-bottom:16px;
+}
+.card-title {
+  font-family:var(--mono); font-size:11px; font-weight:600;
+  color:var(--accent); letter-spacing:1px; text-transform:uppercase;
+  margin-bottom:16px; display:flex; align-items:center; gap:8px;
+}
+.card-title::before {
+  content:''; width:3px; height:14px;
+  background:var(--accent); border-radius:2px;
+}
+
+/* ── FORM ELEMENTS ── */
+.form-row { display:grid; gap:14px; margin-bottom:14px; }
+.form-row.cols-2 { grid-template-columns:1fr 1fr; }
+.form-row.cols-3 { grid-template-columns:1fr 1fr 1fr; }
+
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label {
+  font-family:var(--mono); font-size:10px; font-weight:500;
+  color:var(--text3); letter-spacing:0.8px; text-transform:uppercase;
+}
+.field input, .field select, .field textarea {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius:8px;
+  color: var(--text);
+  font-family: var(--sans); font-size:14px;
+  padding: 10px 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline:none;
+  width:100%;
+}
+.field input:focus, .field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.1);
+}
+.field select option { background:var(--bg3); }
+
+/* ── BARCODE FIELD (special) ── */
+.barcode-wrap {
+  position:relative;
+}
+.barcode-wrap input {
+  font-family: var(--mono) !important;
+  font-size:16px !important; font-weight:600;
+  letter-spacing:2px;
+  border-color: rgba(245,158,11,0.4) !important;
+  padding-right:48px !important;
+  background: rgba(245,158,11,0.04) !important;
+}
+.barcode-wrap input:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.15) !important;
+}
+.barcode-icon {
+  position:absolute; right:14px; top:50%; transform:translateY(-50%);
+  color:var(--accent); font-size:18px; cursor:pointer;
+  transition:opacity 0.15s;
+}
+.barcode-icon:hover { opacity:0.7; }
+.scan-hint {
+  font-size:11px; color:var(--text3); margin-top:4px;
+  display:flex; align-items:center; gap:6px;
+}
+.scan-hint::before { content:'▸'; color:var(--accent); }
+
+/* ── CAMERA SCANNER ── */
+.camera-scanner {
+  display:none;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  margin-top:10px;
+}
+.camera-scanner.open { display:block; }
+#cameraFeed {
+  width:100%; max-height:220px; object-fit:cover; display:block;
+}
+.camera-overlay {
+  position:relative; text-align:center;
+  padding:8px; background:rgba(0,0,0,0.5);
+  font-family:var(--mono); font-size:11px; color:var(--text2);
+}
+.camera-controls { display:flex; gap:8px; padding:10px; }
+
+/* ── BUTTONS ── */
+.btn {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:10px 20px;
+  border-radius:8px; border:none;
+  font-family:var(--sans); font-size:14px; font-weight:500;
+  cursor:pointer; transition:all 0.15s;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), #D97706);
+  color:#000; font-weight:600;
+}
+.btn-primary:hover { opacity:0.9; transform:translateY(-1px); }
+.btn-secondary {
+  background: var(--bg3); border:1px solid var(--border2);
+  color:var(--text2);
+}
+.btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+.btn-danger { background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#FCA5A5; }
+.btn-green { background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); color:#6EE7B7; }
+.btn-sm { padding:6px 12px; font-size:12px; }
+.btn:disabled { opacity:0.4; cursor:not-allowed; transform:none !important; }
+.btn-full { width:100%; justify-content:center; }
+
+/* ── ALERT MESSAGES ── */
+.alert {
+  padding:12px 16px; border-radius:8px;
+  font-size:13px; margin-bottom:14px;
+  display:none; align-items:flex-start; gap:10px;
+}
+.alert.show { display:flex; animation:fadeIn 0.2s; }
+.alert-error { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); color:#FCA5A5; }
+.alert-success { background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#6EE7B7; }
+.alert-warn { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); color:#FDE68A; }
+.alert-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
+
+/* ── PO PROGRESS BAR ── */
+.po-progress-wrap { margin-top:8px; }
+.po-progress-bar {
+  height:4px; background:var(--bg3); border-radius:2px; overflow:hidden;
+}
+.po-progress-fill {
+  height:100%; border-radius:2px;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition:width 0.4s ease;
+}
+.po-progress-label {
+  font-family:var(--mono); font-size:10px; color:var(--text3);
+  margin-top:4px; display:flex; justify-content:space-between;
+}
+
+/* ── PO LIST TABLE ── */
+.table-wrap { overflow-x:auto; }
+table {
+  width:100%; border-collapse:collapse;
+  font-size:13px;
+}
+th {
+  text-align:left;
+  font-family:var(--mono); font-size:10px; font-weight:500;
+  color:var(--text3); letter-spacing:0.8px; text-transform:uppercase;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border);
+}
+td {
+  padding:10px 12px;
+  border-bottom:1px solid rgba(42,51,71,0.5);
+  color:var(--text2);
+  vertical-align:middle;
+}
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:rgba(255,255,255,0.02); }
+
+/* ── STATUS BADGES ── */
+.badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 10px; border-radius:20px;
+  font-family:var(--mono); font-size:10px; font-weight:500;
+  letter-spacing:0.5px;
+}
+.badge-open {
+  background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3);
+  color:#6EE7B7;
+}
+.badge-open::before { content:'●'; font-size:8px; }
+.badge-closed {
+  background:rgba(100,116,139,0.15); border:1px solid rgba(100,116,139,0.3);
+  color:var(--text3);
+}
+.badge-closed::before { content:'■'; font-size:8px; }
+.badge-mat {
+  background:rgba(59,130,246,0.12); border:1px solid rgba(59,130,246,0.25);
+  color:#93C5FD; font-size:10px; padding:2px 8px;
+}
+
+/* ── STAT CARDS ── */
+.stats-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
+  margin-bottom:20px;
+}
+.stat-card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:10px; padding:16px;
+}
+.stat-val {
+  font-family:var(--mono); font-size:26px; font-weight:600;
+  color:var(--text); line-height:1;
+}
+.stat-label { font-size:11px; color:var(--text3); margin-top:4px; }
+.stat-accent { color:var(--accent); }
+.stat-green { color:var(--green); }
+.stat-blue { color:var(--blue); }
+
+/* ── SCAN SUCCESS FLASH ── */
+.scan-flash {
+  display:none;
+  position:fixed; inset:0; z-index:999;
+  background:rgba(16,185,129,0.08);
+  pointer-events:none;
+  animation:flashFade 0.5s ease forwards;
+}
+@keyframes flashFade { 0%{opacity:1} 100%{opacity:0} }
+
+/* ── SCAN COUNTER ── */
+.scan-counter {
+  font-family:var(--mono); font-size:48px; font-weight:600;
+  color:var(--accent); text-align:center;
+  margin:8px 0; line-height:1;
+}
+.scan-counter-label {
+  font-family:var(--mono); font-size:10px;
+  color:var(--text3); text-align:center; letter-spacing:1px;
+  text-transform:uppercase;
+}
+
+/* ── RECENT SCANS ── */
+.recent-list { display:flex; flex-direction:column; gap:6px; }
+.recent-item {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--bg3); border-radius:6px; padding:8px 12px;
+  font-size:12px; animation:slideIn 0.2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+.recent-pallet {
+  font-family:var(--mono); font-weight:500; color:var(--text);
+  font-size:13px;
+}
+.recent-meta { color:var(--text3); font-size:11px; }
+.recent-time { font-family:var(--mono); color:var(--text3); font-size:10px; }
+
+/* ── LOADING SPINNER ── */
+.spinner {
+  width:16px; height:16px; border:2px solid rgba(255,255,255,0.2);
+  border-top-color:#fff; border-radius:50%;
+  animation:spin 0.6s linear infinite; display:inline-block;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ── LOGIN OVERLAY ── */
+#loginOverlay {
+  display:none;
+  position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,0.7);
+  backdrop-filter:blur(8px);
+  align-items:center; justify-content:center;
+}
+#loginOverlay.show { display:flex; }
+.login-box {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:16px; padding:32px; width:100%; max-width:360px;
+  animation:fadeIn 0.2s;
+}
+.login-title {
+  font-family:var(--mono); font-size:16px; font-weight:600;
+  color:var(--text); margin-bottom:4px;
+}
+.login-sub { font-size:13px; color:var(--text3); margin-bottom:24px; }
+
+/* ── RECORDS FILTERS ── */
+.filters-bar {
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;
+}
+.filters-bar select, .filters-bar input {
+  background:var(--bg3); border:1px solid var(--border);
+  border-radius:6px; color:var(--text2);
+  font-family:var(--sans); font-size:13px;
+  padding:7px 12px; outline:none;
+}
+.filters-bar select:focus, .filters-bar input:focus {
+  border-color:var(--accent);
+}
+
+/* ── CONFIG BANNER ── */
+.config-banner {
+  background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3);
+  border-radius:10px; padding:14px 18px; margin-bottom:20px;
+  display:flex; align-items:flex-start; gap:12px;
+}
+.config-banner-icon { font-size:20px; flex-shrink:0; }
+.config-banner-text { font-size:13px; color:#FDE68A; line-height:1.6; }
+.config-banner-text strong { color:var(--accent); }
+.config-banner-text code {
+  background:rgba(0,0,0,0.3); padding:1px 6px; border-radius:3px;
+  font-family:var(--mono); font-size:12px;
+}
+
+/* ── MOBILE ── */
+@media(max-width:600px) {
+  .topbar { padding:0 14px; }
+  .nav-btn span { display:none; }
+  main { padding:16px 12px 60px; }
+  .form-row.cols-2, .form-row.cols-3 { grid-template-columns:1fr; }
+  .stats-grid { grid-template-columns:1fr 1fr; }
+  .topbar-right .admin-badge span { display:none; }
+  .filters-bar { flex-direction:column; }
+}
+
+/* ── DIVIDER ── */
+.divider {
+  border:none; border-top:1px solid var(--border);
+  margin:20px 0;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align:center; padding:40px 20px;
+  color:var(--text3);
+}
+.empty-state-icon { font-size:32px; margin-bottom:10px; opacity:0.4; }
+.empty-state-text { font-size:13px; }
+</style>
+</head>
+<body>
+
+<!-- ══ SCAN FLASH ══ -->
+<div class="scan-flash" id="scanFlash"></div>
+
+<!-- ══ LOGIN OVERLAY (Admin only) ══ -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <div style="font-size:28px;margin-bottom:12px;">🔐</div>
+    <div class="login-title">Admin Login</div>
+    <div class="login-sub">Enter admin password to manage POs</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>Password</label>
+      <input type="password" id="adminPwInput" placeholder="Enter admin password"
+        onkeydown="if(event.key==='Enter')doAdminLogin()">
+    </div>
+    <div class="alert alert-error" id="loginError">
+      <span class="alert-icon">✕</span>
+      <span>Incorrect password. Please try again.</span>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="doAdminLogin()">Login</button>
+    <button class="btn btn-secondary btn-full" style="margin-top:8px;" onclick="closeLogin()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══ TOPBAR ══ -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-icon">W</div>
+    <div>
+      <div class="brand-name">SOLAR TRACKER</div>
+      <div class="brand-sub">Material Receiving System</div>
+    </div>
+  </div>
+  <nav class="topbar-nav">
+    <button class="nav-btn active" onclick="showScreen('scan')" id="navScan">
+      <span>⬡</span> <span>Scan</span>
+    </button>
+    <button class="nav-btn" onclick="showScreen('po')" id="navPo">
+      <span>≡</span> <span>PO Mgmt</span>
+    </button>
+    <button class="nav-btn" onclick="showScreen('records')" id="navRecords">
+      <span>◫</span> <span>Records</span>
+    </button>
+    <button class="nav-btn" onclick="showScreen('dashboard')" id="navDashboard">
+      <span>◈</span> <span>Dashboard</span>
+    </button>
+  </nav>
+  <div class="topbar-right">
+    <span class="admin-badge" onclick="requireAdmin()" id="adminBadge">
+      <span>👤 </span><span id="adminBadgeText">ENGINEER</span>
+    </span>
+    <div class="status-dot" id="connectionDot" title="Checking connection..."></div>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<main>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║   SCREEN 1 — SCAN (default) ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div class="screen active" id="screenScan">
+
+    <div id="configBanner" class="config-banner">
+      <div class="config-banner-icon">⚙️</div>
+      <div class="config-banner-text">
+        <strong>Setup Required:</strong> Open this file in a text editor, find <code>SCRIPT_URL</code> near the top of the &lt;script&gt; section, and paste your Google Apps Script Web App URL. Then save and reopen. <a href="#" onclick="showScreen('setup');return false;" style="color:var(--accent)">See setup guide →</a>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <div class="section-title">Material Receiving</div>
+      <div class="section-sub">Select PO → Scan pallet barcode → Submit</div>
+    </div>
+
+    <!-- PO Selector -->
+    <div class="card">
+      <div class="card-title">01 — Select Purchase Order</div>
+      <div class="form-row cols-2">
+        <div class="field">
+          <label>Purchase Order *</label>
+          <select id="scanPoSelect" onchange="onPoSelected()">
+            <option value="">— Select PO —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Line Code</label>
+          <input type="text" id="scanLineCode" readonly placeholder="Auto-filled from PO"
+            style="color:var(--text3);cursor:default;">
+        </div>
+      </div>
+      <div class="form-row cols-2">
+        <div class="field">
+          <label>Material Type *</label>
+          <select id="scanMaterialType">
+            <option value="">— Select Material —</option>
+            <option>Front Glass</option>
+            <option>Back Glass</option>
+            <option>Front EPE</option>
+            <option>Front EVA</option>
+            <option>Front POE</option>
+            <option>Back EVA</option>
+            <option>Back EPE</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>PO Progress</label>
+          <div style="margin-top:6px;">
+            <div class="po-progress-wrap">
+              <div class="po-progress-bar">
+                <div class="po-progress-fill" id="poProgressFill" style="width:0%"></div>
+              </div>
+              <div class="po-progress-label">
+                <span id="poProgressText">Select a PO to see progress</span>
+                <span id="poProgressPct"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Barcode Scanner -->
+    <div class="card">
+      <div class="card-title">02 — Scan Pallet Barcode</div>
+
+      <div class="field" style="margin-bottom:10px;">
+        <label>Pallet Number *</label>
+        <div class="barcode-wrap">
+          <input type="text" id="palletInput"
+            placeholder="Scan or type pallet number..."
+            autocomplete="off" autocorrect="off" spellcheck="false"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();submitScan();}"
+            oninput="onPalletInput()">
+          <div class="barcode-icon" onclick="toggleCamera()" title="Use camera to scan">📷</div>
+        </div>
+        <div class="scan-hint">USB scanner auto-submits on Enter · Tap 📷 for camera scan</div>
+      </div>
+
+      <!-- Camera Scanner -->
+      <div class="camera-scanner" id="cameraScanner">
+        <video id="cameraFeed" autoplay playsinline muted></video>
+        <div class="camera-overlay">Point camera at barcode — scanning automatically...</div>
+        <div class="camera-controls">
+          <button class="btn btn-secondary btn-sm" onclick="stopCamera()">✕ Close Camera</button>
+          <button class="btn btn-secondary btn-sm" onclick="captureAndDecode()">📸 Capture</button>
+        </div>
+      </div>
+
+      <div class="form-row cols-2" style="margin-top:10px;">
+        <div class="field">
+          <label>Pallet Quantity <span style="color:var(--text3)">(Optional)</span></label>
+          <input type="number" id="palletQty" placeholder="e.g. 30" min="0">
+        </div>
+        <div class="field">
+          <label>Remarks <span style="color:var(--text3)">(Optional)</span></label>
+          <input type="text" id="palletRemarks" placeholder="Any notes...">
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div class="alert alert-error" id="scanError">
+        <span class="alert-icon">⚠</span>
+        <span id="scanErrorMsg">Error message</span>
+      </div>
+      <div class="alert alert-success" id="scanSuccess">
+        <span class="alert-icon">✓</span>
+        <span id="scanSuccessMsg">Pallet scanned successfully!</span>
+      </div>
+      <div class="alert alert-warn" id="scanWarn">
+        <span class="alert-icon">!</span>
+        <span id="scanWarnMsg">Warning</span>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn btn-primary" id="submitBtn" onclick="submitScan()" style="flex:1;">
+          Submit Scan
+        </button>
+        <button class="btn btn-secondary" onclick="clearScanForm()">Clear</button>
+      </div>
+    </div>
+
+    <!-- Session Counter -->
+    <div class="card" style="text-align:center;">
+      <div class="card-title" style="justify-content:center;">Session Stats</div>
+      <div class="scan-counter" id="sessionCount">0</div>
+      <div class="scan-counter-label">Pallets scanned this session</div>
+      <hr class="divider">
+      <div class="card-title" style="justify-content:center;margin-top:0;">Recent Scans</div>
+      <div class="recent-list" id="recentList">
+        <div class="empty-state">
+          <div class="empty-state-icon">⬡</div>
+          <div class="empty-state-text">No scans yet this session</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║   SCREEN 2 — PO MANAGEMENT  ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div class="screen" id="screenPo">
+    <div class="section-header">
+      <div class="section-title">PO Management</div>
+      <div class="section-sub">Add and manage Purchase Orders · Admin only</div>
+    </div>
+
+    <div class="alert alert-warn" id="poAdminWarn" style="display:flex;">
+      <span class="alert-icon">🔒</span>
+      <span>Admin login required to add or modify POs. <a href="#" onclick="requireAdmin();return false;" style="color:var(--accent);">Login as Admin →</a></span>
+    </div>
+
+    <!-- Add PO Form -->
+    <div class="card" id="addPoCard" style="display:none;">
+      <div class="card-title">Add New Purchase Order</div>
+      <div class="form-row cols-3">
+        <div class="field">
+          <label>PO Number *</label>
+          <input type="text" id="poNumber" placeholder="e.g. PO-2024-001">
+        </div>
+        <div class="field">
+          <label>PO Quantity *</label>
+          <input type="number" id="poQty" placeholder="Total pallets" min="1">
+        </div>
+        <div class="field">
+          <label>Line Code *</label>
+          <select id="poLine">
+            <option value="">— Select Line —</option>
+            <option>Line-01</option><option>Line-02</option><option>Line-03</option>
+            <option>Line-04</option><option>Line-05</option><option>Line-06</option>
+            <option>Line-07</option><option>Line-08</option><option>Line-09</option>
+            <option>Line-10</option><option>Line-11</option><option>Line-12</option>
+            <option>Line-13</option><option>Line-14</option><option>Line-15</option>
+            <option>Line-16</option><option>Line-17</option><option>Line-18</option>
+            <option>Line-19</option><option>Line-20</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>PO Status</label>
+          <select id="poStatus">
+            <option value="Open">Open</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </div>
+      </div>
+      <div class="alert alert-error" id="poError">
+        <span class="alert-icon">⚠</span>
+        <span id="poErrorMsg">Error</span>
+      </div>
+      <div class="alert alert-success" id="poSuccess">
+        <span class="alert-icon">✓</span>
+        <span id="poSuccessMsg">PO added!</span>
+      </div>
+      <button class="btn btn-primary btn-full" id="addPoBtn" onclick="addPO()">
+        Add Purchase Order
+      </button>
+    </div>
+
+    <!-- PO List -->
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between;">
+        <span>All Purchase Orders</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadPOs()">↻ Refresh</button>
+      </div>
+      <div id="poListWrap">
+        <div class="empty-state">
+          <div class="empty-state-icon">≡</div>
+          <div class="empty-state-text">Loading POs...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║   SCREEN 3 — RECORDS        ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div class="screen" id="screenRecords">
+    <div class="section-header">
+      <div class="section-title">Scan Records</div>
+      <div class="section-sub">All pallet scan history · Filter and export</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Filters</div>
+      <div class="filters-bar">
+        <select id="filterLine" onchange="filterRecords()">
+          <option value="">All Lines</option>
+          <option>Line-01</option><option>Line-02</option><option>Line-03</option>
+          <option>Line-04</option><option>Line-05</option><option>Line-06</option>
+          <option>Line-07</option><option>Line-08</option><option>Line-09</option>
+          <option>Line-10</option><option>Line-11</option><option>Line-12</option>
+          <option>Line-13</option><option>Line-14</option><option>Line-15</option>
+          <option>Line-16</option><option>Line-17</option><option>Line-18</option>
+          <option>Line-19</option><option>Line-20</option>
+        </select>
+        <select id="filterMaterial" onchange="filterRecords()">
+          <option value="">All Materials</option>
+          <option>Front Glass</option><option>Back Glass</option>
+          <option>Front EPE</option><option>Front EVA</option>
+          <option>Front POE</option><option>Back EVA</option><option>Back EPE</option>
+        </select>
+        <input type="date" id="filterDate" onchange="filterRecords()">
+        <input type="text" id="filterSearch" placeholder="Search pallet #..." oninput="filterRecords()" style="flex:1;min-width:140px;">
+        <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
+        <button class="btn btn-green btn-sm" onclick="exportCSV()">↓ Export CSV</button>
+      </div>
+      <div id="recordsWrap">
+        <div class="empty-state">
+          <div class="empty-state-icon">◫</div>
+          <div class="empty-state-text">Loading records...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║   SCREEN 4 — DASHBOARD      ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div class="screen" id="screenDashboard">
+    <div class="section-header">
+      <div class="section-title">Dashboard</div>
+      <div class="section-sub">Live overview of all lines</div>
+    </div>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-val stat-accent" id="statTotalScans">—</div><div class="stat-label">Total Scans Today</div></div>
+      <div class="stat-card"><div class="stat-val stat-green" id="statOpenPOs">—</div><div class="stat-label">Open POs</div></div>
+      <div class="stat-card"><div class="stat-val" id="statClosedPOs">—</div><div class="stat-label">Closed POs</div></div>
+      <div class="stat-card"><div class="stat-val stat-blue" id="statTotalPallets">—</div><div class="stat-label">Total Pallets</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between;">
+        <span>PO Progress Overview</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">↻ Refresh</button>
+      </div>
+      <div id="dashboardWrap">
+        <div class="empty-state"><div class="empty-state-icon">◈</div><div class="empty-state-text">Loading dashboard...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║   SCREEN 5 — SETUP GUIDE    ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div class="screen" id="screenSetup">
+    <div class="section-header">
+      <div class="section-title">Setup Guide</div>
+      <div class="section-sub">One-time setup — takes about 15 minutes</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Step 1 — Create Google Sheet</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
+        Go to <strong style="color:var(--accent)">sheets.google.com</strong> → Create new spreadsheet → Name it: <strong>Solar Material Tracker</strong><br>
+        Create two sheets (tabs): <strong>PO_Master</strong> and <strong>Pallet_Log</strong>
+      </p>
+      <p style="font-size:12px;color:var(--text3);">PO_Master columns: PO_Number | PO_Quantity | Line_Code | Material_Type | PO_Status | Received_Qty | Added_On</p>
+      <p style="font-size:12px;color:var(--text3);margin-top:4px;">Pallet_Log columns: Pallet_Number | PO_Number | Line_Code | Material_Type | Pallet_Qty | Remarks | Scanned_On</p>
+    </div>
+    <div class="card">
+      <div class="card-title">Step 2 — Add Google Apps Script</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
+        In your Google Sheet → <strong>Extensions → Apps Script</strong> → Delete existing code → Paste the <strong>Code.gs</strong> file content → Save (Ctrl+S)
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">Step 3 — Deploy as Web App</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:6px;">
+        In Apps Script → <strong>Deploy → New Deployment</strong><br>
+        Type: <strong>Web App</strong><br>
+        Execute as: <strong>Me</strong><br>
+        Who has access: <strong>Anyone</strong><br>
+        Click <strong>Deploy</strong> → Copy the Web App URL
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">Step 4 — Connect This App</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px;">
+        Open <strong>material_tracker.html</strong> in a text editor → Find <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;font-family:var(--mono);font-size:12px;">const SCRIPT_URL = ''</code> near the top of the script section → Paste your Web App URL between the quotes → Save
+      </p>
+      <div class="field">
+        <label>Your Apps Script URL (paste here to auto-update)</label>
+        <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/...">
+      </div>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="saveScriptUrl()">Save URL</button>
+      <button class="btn btn-secondary" style="margin-top:8px;" onclick="testConnection()">🔌 Test Connection Now</button>
+      <div style="margin-top:12px;padding:10px 14px;background:rgba(0,0,0,0.2);border-radius:8px;font-family:var(--mono);font-size:11px;color:var(--text3);">
+        Or open browser Console (press F12 → Console tab) and type: <span style="color:var(--accent);">testConnection()</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Step 5 — Share with Engineers</div>
+      <p style="font-size:13px;color:var(--text2);line-height:1.7;">
+        Host this HTML file on <strong>GitHub Pages</strong> (free) or any web server → Share the link with all 20 engineers via WhatsApp / Teams.<br><br>
+        <strong style="color:var(--accent);">Default admin password: admin123</strong> (change it in the Code.gs script)
+      </p>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ════════════════════════════════════════════════════
+   ██████╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗
+  ██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝
+  ██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗
+  ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║
+  ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝
+   ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝
+   ════════════════════════════════════════════════════
+   PASTE YOUR GOOGLE APPS SCRIPT URL BELOW
+   ════════════════════════════════════════════════════ */
+
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMugBHWr1QieQrJylmbVcSe2S0e1W7jJYFkcu_g1a7wf2WuVOmpYLXaJIcRC3Wt7cVMg/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
+
+/* ════ APP STATE ════ */
+const ADMIN_PASSWORD = 'admin123'; // Change this!
+let isAdmin = false;
+let allPOs = [];
+let allRecords = [];
+let sessionScans = 0;
+let cameraStream = null;
+
+/* ════ INIT ════ */
+window.onload = () => {
+  checkConfig();
+  if (SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com')) {
+    loadPOs();
+    loadRecords();
+    loadDashboard();
+  }
+  document.getElementById('palletInput').focus();
+};
+
+function checkConfig() {
+  const banner = document.getElementById('configBanner');
+  if (SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com')) {
+    banner.style.display = 'none';
+    document.getElementById('connectionDot').style.background = 'var(--green)';
+    document.getElementById('connectionDot').style.boxShadow = '0 0 6px var(--green)';
+  } else {
+    document.getElementById('connectionDot').style.background = 'var(--accent)';
+    document.getElementById('connectionDot').style.boxShadow = '0 0 6px var(--accent)';
+    document.getElementById('connectionDot').title = 'Not connected — paste Apps Script URL';
+  }
+}
+
+function saveScriptUrl() {
+  const url = document.getElementById('scriptUrlInput').value.trim();
+  if (url) {
+    alert('URL saved! Now open this HTML file in a text editor, find SCRIPT_URL and paste:\n\n' + url + '\n\nThen save and refresh.');
+  }
+}
+
+/* ════ SCREEN NAV ════ */
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const screens = { scan:'screenScan', po:'screenPo', records:'screenRecords', dashboard:'screenDashboard', setup:'screenSetup' };
+  const navs = { scan:'navScan', po:'navPo', records:'navRecords', dashboard:'navDashboard' };
+  document.getElementById(screens[name]).classList.add('active');
+  if (navs[name]) document.getElementById(navs[name]).classList.add('active');
+
+  if (name === 'scan') {
+    setTimeout(() => document.getElementById('palletInput').focus(), 100);
+    loadPOs();
+  }
+  if (name === 'po') loadPOs();
+  if (name === 'records') loadRecords();
+  if (name === 'dashboard') loadDashboard();
+}
+
+/* ════ ADMIN AUTH ════ */
+function requireAdmin() {
+  if (isAdmin) return;
+  document.getElementById('loginOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('adminPwInput').focus(), 100);
+}
+function doAdminLogin() {
+  const pw = document.getElementById('adminPwInput').value;
+  if (pw === ADMIN_PASSWORD) {
+    isAdmin = true;
+    document.getElementById('loginOverlay').classList.remove('show');
+    document.getElementById('adminBadgeText').textContent = 'ADMIN';
+    document.getElementById('adminBadge').style.background = 'rgba(245,158,11,0.15)';
+    document.getElementById('adminBadge').style.borderColor = 'rgba(245,158,11,0.4)';
+    document.getElementById('adminBadge').style.color = 'var(--accent)';
+    document.getElementById('addPoCard').style.display = 'block';
+    document.getElementById('poAdminWarn').style.display = 'none';
+    document.getElementById('adminPwInput').value = '';
+    document.getElementById('loginError').classList.remove('show');
+  } else {
+    document.getElementById('loginError').classList.add('show');
+    document.getElementById('adminPwInput').value = '';
+    document.getElementById('adminPwInput').focus();
+  }
+}
+function closeLogin() {
+  document.getElementById('loginOverlay').classList.remove('show');
+  document.getElementById('adminPwInput').value = '';
+}
+
+/* ════ API CALL ════ */
+/* ════ API CALL — JSONP with fetch fallback ════ */
+function callAPI(action, data = {}) {
+  if (!SCRIPT_URL) {
+    return Promise.resolve(getMockData(action, data));
+  }
+  return jsonpCall(action, data);
+}
+
+function jsonpCall(action, data) {
+  return new Promise((resolve) => {
+    const cbName = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve({ success: false, error: 'Timeout — check SCRIPT_URL and redeploy Apps Script.' });
+    }, 10000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[cbName]; } catch(e){}
+      const s = document.getElementById('jsonp_' + cbName);
+      if (s && s.parentNode) s.parentNode.removeChild(s);
+    }
+
+    window[cbName] = function(result) {
+      cleanup();
+      resolve(result);
+    };
+
+    const params = new URLSearchParams({ action: action, callback: cbName });
+    Object.keys(data).forEach(function(k){ params.append(k, data[k]); });
+
+    const script = document.createElement('script');
+    script.id = 'jsonp_' + cbName;
+    script.src = SCRIPT_URL + '?' + params.toString();
+    script.onerror = function() {
+      cleanup();
+      resolve({ success: false, error: 'Script load failed. Check your Apps Script URL is correct and deployed.' });
+    };
+    document.body.appendChild(script);
+  });
+}
+
+/* ════ TEST — open browser console and type: testConnection() ════ */
+function testConnection() {
+  if (!SCRIPT_URL) {
+    alert('SCRIPT_URL is empty! Open this HTML file in Notepad and paste your Apps Script URL.');
+    return;
+  }
+  alert('Testing... check browser console (F12) for result.');
+  jsonpCall('getPOs', {}).then(function(res) {
+    console.log('API Result:', res);
+    if (res.success) {
+      alert('Connected! POs found: ' + (res.data || []).length);
+    } else {
+      alert('Error: ' + res.error);
+    }
+  });
+}
+
+/* ════ MOCK DATA (for testing without backend) ════ */
+const mockPOs = [
+  { id:'1', poNumber:'PO-2024-001', poQty:50, lineCode:'Line-01', materialType:'Front Glass', status:'Open', receivedQty:23 },
+  { id:'2', poNumber:'PO-2024-002', poQty:30, lineCode:'Line-02', materialType:'Back Glass', status:'Open', receivedQty:30 },
+  { id:'3', poNumber:'PO-2024-003', poQty:40, lineCode:'Line-03', materialType:'Front EVA',  status:'Closed', receivedQty:40 },
+  { id:'4', poNumber:'PO-2024-004', poQty:60, lineCode:'Line-05', materialType:'Front POE',  status:'Open', receivedQty:15 },
+];
+const mockRecords = [];
+let mockIdCounter = 100;
+
+function getMockData(action, data) {
+  if (action === 'getPOs') return { success:true, data: mockPOs };
+  if (action === 'getRecords') return { success:true, data: mockRecords };
+  if (action === 'addPO') {
+    const po = { id: String(++mockIdCounter), poNumber:data.poNumber, poQty:parseInt(data.poQty), lineCode:data.lineCode, status:'Open', receivedQty:0 };
+    mockPOs.push(po);
+    return { success:true, message:'PO added (demo mode)' };
+  }
+  if (action === 'scanPallet') {
+    const dup = mockRecords.find(r => r.palletNumber === data.palletNumber);
+    if (dup) return { success:false, duplicate:true, error:`Pallet "${data.palletNumber}" already scanned for ${dup.lineCode} on ${dup.scannedOn}` };
+    const rec = { id:String(++mockIdCounter), palletNumber:data.palletNumber, poNumber:data.poNumber, lineCode:data.lineCode, materialType:data.materialType, palletQty:data.palletQty||'', remarks:data.remarks||'', scannedOn:new Date().toLocaleString() };
+    mockRecords.unshift(rec);
+    const po = mockPOs.find(p => p.poNumber === data.poNumber);
+    if (po) { po.receivedQty++; if (po.receivedQty >= po.poQty) po.status = 'Closed'; }
+    return { success:true, message:'Pallet scanned (demo mode)', autoClosed: po && po.status==='Closed' };
+  }
+  if (action === 'updatePOStatus') {
+    const po = mockPOs.find(p => p.poNumber === data.poNumber);
+    if (po) po.status = data.status;
+    return { success:true };
+  }
+  return { success:false, error:'Unknown action' };
+}
+
+/* ════ LOAD POs ════ */
+async function loadPOs() {
+  const res = await callAPI('getPOs');
+  if (res.success) {
+    allPOs = res.data || [];
+    renderPODropdown();
+    renderPOTable();
+  }
+}
+
+function renderPODropdown() {
+  const sel = document.getElementById('scanPoSelect');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Select PO —</option>';
+  allPOs.filter(p => p.status === 'Open').forEach(po => {
+    const opt = document.createElement('option');
+    opt.value = po.poNumber;
+    opt.textContent = `${po.poNumber} · ${po.lineCode}`;
+    if (po.poNumber === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function renderPOTable() {
+  const wrap = document.getElementById('poListWrap');
+  if (!allPOs.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">≡</div><div class="empty-state-text">No POs found</div></div>';
+    return;
+  }
+  let html = '<div class="table-wrap"><table><thead><tr><th>PO Number</th><th>Line</th><th>Progress</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+  allPOs.forEach(po => {
+    const pct = po.poQty > 0 ? Math.min(100, Math.round((po.receivedQty / po.poQty) * 100)) : 0;
+    const isAdmin_ = isAdmin;
+    html += `<tr>
+      <td style="font-family:var(--mono);font-weight:500;color:var(--text)">${po.poNumber}</td>
+      <td>${po.lineCode}</td>
+      <td style="min-width:120px;">
+        <div class="po-progress-bar"><div class="po-progress-fill" style="width:${pct}%"></div></div>
+        <div class="po-progress-label"><span>${po.receivedQty}/${po.poQty}</span><span>${pct}%</span></div>
+      </td>
+      <td><span class="badge ${po.status==='Open'?'badge-open':'badge-closed'}">${po.status}</span></td>
+      <td>${isAdmin_ && po.status==='Open' ? `<button class="btn btn-danger btn-sm" onclick="closePO('${po.poNumber}')">Close PO</button>` : '—'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+/* ════ ADD PO ════ */
+async function addPO() {
+  if (!isAdmin) { requireAdmin(); return; }
+  const poNumber = document.getElementById('poNumber').value.trim();
+  const poQty = document.getElementById('poQty').value.trim();
+  const lineCode = document.getElementById('poLine').value;
+  const poStatus = document.getElementById('poStatus').value;
+
+  hideAlerts('po');
+  if (!poNumber || !poQty || !lineCode) {
+    showAlert('poError', 'Please fill all required fields.');
+    return;
+  }
+  if (allPOs.find(p => p.poNumber === poNumber)) {
+    showAlert('poError', `PO Number "${poNumber}" already exists.`);
+    return;
+  }
+
+  const btn = document.getElementById('addPoBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+
+  const res = await callAPI('addPO', { poNumber, poQty, lineCode, poStatus });
+
+  btn.disabled = false; btn.textContent = 'Add Purchase Order';
+  if (res.success) {
+    showAlert('poSuccess', `PO "${poNumber}" added successfully!${SCRIPT_URL?'':' (Demo mode)'}`);
+    document.getElementById('poNumber').value = '';
+    document.getElementById('poQty').value = '';
+    document.getElementById('poLine').value = '';
+    await loadPOs();
+  } else {
+    showAlert('poError', res.error || 'Failed to add PO.');
+  }
+}
+
+/* ════ CLOSE PO ════ */
+async function closePO(poNumber) {
+  if (!isAdmin) { requireAdmin(); return; }
+  if (!confirm(`Close PO "${poNumber}"? This cannot be undone.`)) return;
+  const res = await callAPI('updatePOStatus', { poNumber, status: 'Closed' });
+  if (res.success) { await loadPOs(); await loadDashboard(); }
+}
+
+/* ════ PO SELECTED ════ */
+function onPoSelected() {
+  const poNumber = document.getElementById('scanPoSelect').value;
+  const po = allPOs.find(p => p.poNumber === poNumber);
+  if (po) {
+    document.getElementById('scanLineCode').value = po.lineCode;
+    // Material Type is now selected by engineer — not auto-filled from PO
+    const pct = po.poQty > 0 ? Math.min(100, Math.round((po.receivedQty / po.poQty) * 100)) : 0;
+    document.getElementById('poProgressFill').style.width = pct + '%';
+    document.getElementById('poProgressText').textContent = `${po.receivedQty} of ${po.poQty} received`;
+    document.getElementById('poProgressPct').textContent = pct + '%';
+    document.getElementById('palletInput').focus();
+  } else {
+    document.getElementById('scanLineCode').value = '';
+    document.getElementById('scanMaterialType').value = '';
+    document.getElementById('poProgressFill').style.width = '0%';
+    document.getElementById('poProgressText').textContent = 'Select a PO to see progress';
+    document.getElementById('poProgressPct').textContent = '';
+  }
+  hideAlerts('scan');
+}
+
+/* ════ PALLET INPUT ════ */
+function onPalletInput() {
+  hideAlerts('scan');
+}
+
+/* ════ SUBMIT SCAN ════ */
+async function submitScan() {
+  const poNumber = document.getElementById('scanPoSelect').value;
+  const palletNumber = document.getElementById('palletInput').value.trim().toUpperCase();
+  const materialType = document.getElementById('scanMaterialType').value;
+  const palletQty = document.getElementById('palletQty').value.trim();
+  const remarks = document.getElementById('palletRemarks').value.trim();
+
+  hideAlerts('scan');
+
+  if (!poNumber) { showAlert('scanError', 'Please select a Purchase Order first.'); return; }
+  if (!materialType) { showAlert('scanError', 'Please select Material Type before scanning.'); return; }
+  if (!palletNumber) { showAlert('scanError', 'Pallet number cannot be empty. Please scan or type it.'); return; }
+
+  const po = allPOs.find(p => p.poNumber === poNumber);
+  const lineCode = po ? po.lineCode : '';
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Checking...';
+
+  const res = await callAPI('scanPallet', { palletNumber, poNumber, lineCode, materialType, palletQty, remarks });
+
+  btn.disabled = false;
+  btn.textContent = 'Submit Scan';
+
+  if (res.success) {
+    // Flash green
+    const flash = document.getElementById('scanFlash');
+    flash.style.display = 'block';
+    setTimeout(() => flash.style.display = 'none', 500);
+
+    sessionScans++;
+    document.getElementById('sessionCount').textContent = sessionScans;
+
+    // Update progress
+    if (po) {
+      po.receivedQty = (po.receivedQty || 0) + 1;
+      const pct = Math.min(100, Math.round((po.receivedQty / po.poQty) * 100));
+      document.getElementById('poProgressFill').style.width = pct + '%';
+      document.getElementById('poProgressText').textContent = `${po.receivedQty} of ${po.poQty} received`;
+      document.getElementById('poProgressPct').textContent = pct + '%';
+    }
+
+    // Auto-close notification
+    if (res.autoClosed) {
+      showAlert('scanWarn', `🎉 PO "${poNumber}" is now CLOSED — all ${po?.poQty} pallets received!`);
+      if (po) po.status = 'Closed';
+      renderPODropdown();
+    } else {
+      showAlert('scanSuccess', `✓ Pallet "${palletNumber}" scanned successfully!${SCRIPT_URL?'':' (Demo mode)'}`);
+    }
+
+    // Add to recent list
+    addRecentScan(palletNumber, lineCode, materialType);
+
+    // Clear & refocus for next scan
+    document.getElementById('palletInput').value = '';
+    document.getElementById('palletQty').value = '';
+    document.getElementById('palletRemarks').value = '';
+    document.getElementById('palletInput').focus();
+
+  } else if (res.duplicate) {
+    showAlert('scanError', `⛔ DUPLICATE PALLET: "${palletNumber}" — ${res.error}`);
+    document.getElementById('palletInput').select();
+  } else {
+    showAlert('scanError', res.error || 'Scan failed. Please try again.');
+  }
+}
+
+/* ════ RECENT SCANS ════ */
+function addRecentScan(palletNumber, lineCode, materialType) {
+  const list = document.getElementById('recentList');
+  const now = new Date().toLocaleTimeString();
+  const emptyState = list.querySelector('.empty-state');
+  if (emptyState) emptyState.remove();
+
+  const item = document.createElement('div');
+  item.className = 'recent-item';
+  item.innerHTML = `
+    <div>
+      <div class="recent-pallet">${palletNumber}</div>
+      <div class="recent-meta">${lineCode} · ${materialType}</div>
+    </div>
+    <div class="recent-time">${now}</div>
+  `;
+  list.insertBefore(item, list.firstChild);
+  // Keep max 8 items
+  while (list.children.length > 8) list.removeChild(list.lastChild);
+}
+
+/* ════ CAMERA SCANNER ════ */
+async function toggleCamera() {
+  const scanner = document.getElementById('cameraScanner');
+  if (scanner.classList.contains('open')) {
+    stopCamera();
+  } else {
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      document.getElementById('cameraFeed').srcObject = cameraStream;
+      scanner.classList.add('open');
+    } catch(e) {
+      showAlert('scanError', 'Camera access denied or not available on this device.');
+    }
+  }
+}
+function stopCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  document.getElementById('cameraScanner').classList.remove('open');
+}
+function captureAndDecode() {
+  // Basic camera capture — for full barcode decoding, integrate ZXing library
+  const video = document.getElementById('cameraFeed');
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  showAlert('scanWarn', 'Camera captured. For automatic barcode decode, your IT team can add ZXing.js library. For now, USB scanner is recommended.');
+  stopCamera();
+}
+
+/* ════ CLEAR FORM ════ */
+function clearScanForm() {
+  document.getElementById('palletInput').value = '';
+  document.getElementById('palletQty').value = '';
+  document.getElementById('palletRemarks').value = '';
+  document.getElementById('scanMaterialType').value = '';
+  hideAlerts('scan');
+  document.getElementById('palletInput').focus();
+}
+
+/* ════ LOAD RECORDS ════ */
+async function loadRecords() {
+  const res = await callAPI('getRecords');
+  if (res.success) {
+    allRecords = res.data || [];
+    filterRecords();
+  }
+}
+
+function filterRecords() {
+  const line = document.getElementById('filterLine').value;
+  const mat = document.getElementById('filterMaterial').value;
+  const date = document.getElementById('filterDate').value;
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+
+  let filtered = allRecords.filter(r => {
+    if (line && r.lineCode !== line) return false;
+    if (mat && r.materialType !== mat) return false;
+    if (search && !r.palletNumber.toLowerCase().includes(search)) return false;
+    if (date && r.scannedOn && !r.scannedOn.includes(date.split('-').reverse().join('/'))) return false;
+    return true;
+  });
+
+  renderRecords(filtered);
+}
+
+function renderRecords(records) {
+  const wrap = document.getElementById('recordsWrap');
+  if (!records.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">◫</div><div class="empty-state-text">No records found</div></div>';
+    return;
+  }
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Qty</th><th>Scanned On</th>
+  </tr></thead><tbody>`;
+  records.slice(0, 200).forEach(r => {
+    html += `<tr>
+      <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${r.palletNumber}</td>
+      <td style="font-family:var(--mono);font-size:12px;">${r.poNumber}</td>
+      <td>${r.lineCode}</td>
+      <td><span class="badge badge-mat">${r.materialType}</span></td>
+      <td>${r.palletQty || '—'}</td>
+      <td style="font-size:11px;color:var(--text3)">${r.scannedOn}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  if (records.length > 200) html += `<p style="font-size:12px;color:var(--text3);padding:8px 12px;">Showing first 200 of ${records.length} records. Export CSV for full data.</p>`;
+  wrap.innerHTML = html;
+}
+
+function clearFilters() {
+  document.getElementById('filterLine').value = '';
+  document.getElementById('filterMaterial').value = '';
+  document.getElementById('filterDate').value = '';
+  document.getElementById('filterSearch').value = '';
+  filterRecords();
+}
+
+/* ════ EXPORT CSV ════ */
+function exportCSV() {
+  const line = document.getElementById('filterLine').value;
+  const mat = document.getElementById('filterMaterial').value;
+  let data = allRecords.filter(r => (!line || r.lineCode === line) && (!mat || r.materialType === mat));
+
+  let csv = 'Pallet Number,PO Number,Line Code,Material Type,Pallet Qty,Remarks,Scanned On\n';
+  data.forEach(r => {
+    csv += `"${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.palletQty||''}","${r.remarks||''}","${r.scannedOn}"\n`;
+  });
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `pallet_scan_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+/* ════ DASHBOARD ════ */
+async function loadDashboard() {
+  const poRes = await callAPI('getPOs');
+  const recRes = await callAPI('getRecords');
+
+  if (poRes.success) allPOs = poRes.data || [];
+  if (recRes.success) allRecords = recRes.data || [];
+
+  const today = new Date().toLocaleDateString();
+  const todayScans = allRecords.filter(r => r.scannedOn && r.scannedOn.includes(today.split('/').join('/')||today)).length;
+  const openPOs = allPOs.filter(p => p.status === 'Open').length;
+  const closedPOs = allPOs.filter(p => p.status === 'Closed').length;
+
+  document.getElementById('statTotalScans').textContent = todayScans || allRecords.length;
+  document.getElementById('statOpenPOs').textContent = openPOs;
+  document.getElementById('statClosedPOs').textContent = closedPOs;
+  document.getElementById('statTotalPallets').textContent = allRecords.length;
+
+  // PO progress list
+  const wrap = document.getElementById('dashboardWrap');
+  if (!allPOs.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">◈</div><div class="empty-state-text">No POs yet</div></div>';
+    return;
+  }
+  let html = '';
+  allPOs.forEach(po => {
+    const pct = po.poQty > 0 ? Math.min(100, Math.round((po.receivedQty / po.poQty) * 100)) : 0;
+    html += `<div style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div>
+          <span style="font-family:var(--mono);font-weight:600;color:var(--text);font-size:13px;">${po.poNumber}</span>
+          <span style="font-size:12px;color:var(--text3);margin-left:10px;">${po.lineCode} · ${po.materialType}</span>
+        </div>
+        <span class="badge ${po.status==='Open'?'badge-open':'badge-closed'}">${po.status}</span>
+      </div>
+      <div class="po-progress-bar">
+        <div class="po-progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':'linear-gradient(90deg,var(--accent),#D97706)'}"></div>
+      </div>
+      <div class="po-progress-label">
+        <span>${po.receivedQty} of ${po.poQty} pallets received</span>
+        <span style="font-weight:600;color:${pct===100?'var(--green)':'var(--accent)'}">${pct}%</span>
+      </div>
+    </div>`;
+  });
+  wrap.innerHTML = html;
+}
+
+/* ════ ALERT HELPERS ════ */
+function showAlert(id, msg) {
+  const el = document.getElementById(id);
+  const msgEl = document.getElementById(id + 'Msg');
+  if (msgEl) msgEl.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 6000);
+}
+function hideAlerts(section) {
+  if (section === 'scan') ['scanError','scanSuccess','scanWarn'].forEach(id => document.getElementById(id).classList.remove('show'));
+  if (section === 'po') ['poError','poSuccess'].forEach(id => document.getElementById(id).classList.remove('show'));
+}
+
+/* ════ PO SCREEN ADMIN CHECK ════ */
+document.getElementById('navPo').addEventListener('click', () => {
+  if (isAdmin) {
+    document.getElementById('addPoCard').style.display = 'block';
+    document.getElementById('poAdminWarn').style.display = 'none';
+  }
+});
+</script>
+</body>
+</html>
