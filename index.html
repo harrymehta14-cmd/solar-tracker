@@ -871,7 +871,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
    PASTE YOUR GOOGLE APPS SCRIPT URL BELOW
    ════════════════════════════════════════════════════ */
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxXCOCFgZ2hTcFqDvLxSvCwHyz6wAiCkKs_OVst8O4a/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMugBHWr1QieQrJylmbVcSe2S0e1W7jJYFkcu_g1a7wf2WuVOmpYLXaJIcRC3Wt7cVMg/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
 
 /* ════ APP STATE ════ */
 const ADMIN_PASSWORD = 'admin123'; // Change this!
@@ -962,6 +962,11 @@ function closeLogin() {
 
 /* ════ API CALL ════ */
 /* ════ API CALL — JSONP with fetch fallback ════ */
+/* ════════════════════════════════════════════════════
+   API LAYER — Handles all Google Apps Script calls
+   Uses fetch with mode:no-cors fallback for CORS issues
+   ════════════════════════════════════════════════════ */
+
 function callAPI(action, data = {}) {
   if (!SCRIPT_URL) {
     return Promise.resolve(getMockData(action, data));
@@ -969,56 +974,127 @@ function callAPI(action, data = {}) {
   return jsonpCall(action, data);
 }
 
+/* Primary method — JSONP (works cross-origin) */
 function jsonpCall(action, data) {
-  return new Promise((resolve) => {
-    const cbName = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 9999);
+  return new Promise(function(resolve) {
+    const cbName = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 99999);
+    let done = false;
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(function() {
+      if (done) return;
+      done = true;
       cleanup();
-      resolve({ success: false, error: 'Timeout — check SCRIPT_URL and redeploy Apps Script.' });
-    }, 10000);
+      console.warn('JSONP timeout for action:', action);
+      resolve({ success: false, error: 'Request timed out. Please try again.' });
+    }, 15000);
 
     function cleanup() {
       clearTimeout(timer);
-      try { delete window[cbName]; } catch(e){}
-      const s = document.getElementById('jsonp_' + cbName);
-      if (s && s.parentNode) s.parentNode.removeChild(s);
+      try { delete window[cbName]; } catch(e) {}
+      const el = document.getElementById('jsonp_' + cbName);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
     }
 
     window[cbName] = function(result) {
+      if (done) return;
+      done = true;
       cleanup();
       resolve(result);
     };
 
-    const params = new URLSearchParams({ action: action, callback: cbName });
-    Object.keys(data).forEach(function(k){ params.append(k, data[k]); });
+    /* Build URL — append all params */
+    let url = SCRIPT_URL + '?callback=' + cbName + '&action=' + encodeURIComponent(action);
+    Object.keys(data).forEach(function(k) {
+      if (data[k] !== undefined && data[k] !== null && data[k] !== '') {
+        url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }
+    });
 
     const script = document.createElement('script');
     script.id = 'jsonp_' + cbName;
-    script.src = SCRIPT_URL + '?' + params.toString();
-    script.onerror = function() {
-      cleanup();
-      resolve({ success: false, error: 'Script load failed. Check your Apps Script URL is correct and deployed.' });
+    script.type = 'text/javascript';
+    script.src = url;
+
+    script.onload = function() {
+      /* Script loaded — callback should fire soon */
+      setTimeout(function() {
+        if (!done) {
+          done = true;
+          cleanup();
+          resolve({ success: false, error: 'Script loaded but no response. Check Apps Script deployment.' });
+        }
+      }, 5000);
     };
-    document.body.appendChild(script);
+
+    script.onerror = function(e) {
+      if (done) return;
+      console.error('JSONP script error:', e, 'URL:', url);
+      cleanup();
+      /* Try fetch as fallback */
+      fetchFallback(action, data).then(function(res) {
+        if (!done) { done = true; resolve(res); }
+      });
+    };
+
+    (document.head || document.body).appendChild(script);
   });
 }
 
-/* ════ TEST — open browser console and type: testConnection() ════ */
-function testConnection() {
+/* Fallback — fetch with credentials omitted */
+async function fetchFallback(action, data) {
+  try {
+    console.log('Trying fetch fallback for:', action);
+    let url = SCRIPT_URL + '?action=' + encodeURIComponent(action);
+    Object.keys(data).forEach(function(k) {
+      if (data[k] !== undefined && data[k] !== '') {
+        url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
+      }
+    });
+
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'omit',
+      redirect: 'follow'
+    });
+    const text = await res.text();
+    console.log('Fetch response text:', text.substring(0, 200));
+
+    /* Strip JSONP wrapper if present: callbackName({...}) */
+    const clean = text.replace(/^[a-zA-Z0-9_]+\(/, '').replace(/\);?\s*$/, '').trim();
+    return JSON.parse(clean);
+  } catch(e) {
+    console.error('Fetch fallback failed:', e);
+    return { success: false, error: 'Connection failed: ' + e.message };
+  }
+}
+
+/* ════ CONNECTION TEST ════ */
+async function testConnection() {
   if (!SCRIPT_URL) {
-    alert('SCRIPT_URL is empty! Open this HTML file in Notepad and paste your Apps Script URL.');
+    alert('SCRIPT_URL is empty!');
     return;
   }
-  alert('Testing... check browser console (F12) for result.');
-  jsonpCall('getPOs', {}).then(function(res) {
-    console.log('API Result:', res);
+  console.log('Testing URL:', SCRIPT_URL);
+  const statusEl = document.getElementById('connectionDot');
+  if (statusEl) { statusEl.style.background = 'orange'; statusEl.style.boxShadow = '0 0 6px orange'; }
+
+  try {
+    const res = await callAPI('ping', {});
+    console.log('Test result:', res);
     if (res.success) {
-      alert('Connected! POs found: ' + (res.data || []).length);
+      alert('✅ Connected! Server time: ' + (res.time || 'OK'));
+      if (statusEl) { statusEl.style.background = 'var(--green)'; statusEl.style.boxShadow = '0 0 6px var(--green)'; }
     } else {
-      alert('Error: ' + res.error);
+      alert('❌ Error: ' + res.error + '\n\nCheck:\n1. Apps Script URL ends with /exec\n2. Deployed as Web App\n3. Who has access = Anyone');
     }
-  });
+  } catch(e) {
+    alert('Exception: ' + e.message);
+    console.error(e);
+  }
+
+  /* Also test getPOs */
+  const pos = await callAPI('getPOs', {});
+  console.log('getPOs result:', pos);
 }
 
 /* ════ MOCK DATA (for testing without backend) ════ */
