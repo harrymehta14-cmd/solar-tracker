@@ -648,19 +648,23 @@ tr:hover td { background:rgba(255,255,255,0.02); }
       <div class="field" style="margin-bottom:10px;">
         <label>Pallet Number *</label>
         <div class="barcode-wrap">
+          <!-- Display field — shows scanned value, blocks manual typing -->
+          <input type="text" id="palletDisplay"
+            placeholder="🔒 Scan barcode — typing not allowed"
+            readonly
+            style="cursor:default;background:rgba(26,122,46,0.04);font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:2px;"
+            onclick="focusScannerInput()"
+            tabindex="-1">
+          <!-- Hidden real input — captures scanner keystrokes -->
           <input type="text" id="palletInput"
-            placeholder="Scan barcode only — typing not allowed"
+            style="position:absolute;opacity:0;width:1px;height:1px;left:-9999px;"
             autocomplete="off" autocorrect="off" spellcheck="false"
             autocapitalize="off"
-            onkeydown="handlePalletKeydown(event)"
-            oninput="onPalletInput()"
-            readonly
-            style="cursor:not-allowed;background:rgba(26,122,46,0.04);"
-            onfocus="activateScanMode(this)"
-            onblur="deactivateScanMode(this)">
+            onkeydown="handleScannerKeydown(event)"
+            oninput="onScannerInput()">
           <div class="barcode-icon" onclick="toggleCamera()" title="Use camera to scan">📷</div>
         </div>
-        <div class="scan-hint">🔒 Scan only — USB scanner or 📷 camera · Manual typing disabled</div>
+        <div class="scan-hint" id="scanHintText">🔒 Tap box then scan barcode · 📷 for camera scan</div>
       </div>
 
       <!-- ZXing Camera Scanner -->
@@ -978,7 +982,8 @@ window.onload = () => {
     loadRecords();
     loadDashboard();
   }
-  document.getElementById('palletInput').focus();
+  // Init scanner hidden input on load
+  setTimeout(() => focusScannerInput(), 300);
 };
 
 function checkConfig() {
@@ -1011,8 +1016,8 @@ function showScreen(name) {
   if (navs[name]) document.getElementById(navs[name]).classList.add('active');
 
   if (name === 'scan') {
-    setTimeout(() => document.getElementById('palletInput').focus(), 100);
     loadPOs();
+    setTimeout(() => focusScannerInput(), 200);
   }
   if (name === 'po') loadPOs();
   if (name === 'records') loadRecords();
@@ -1375,71 +1380,123 @@ function focusQty() {
   }
 }
 
-/* ════ SCAN-ONLY MODE FOR PALLET INPUT ════ */
-// USB barcode scanners send characters very fast then press Enter
-// We track timing: if chars arrive < 50ms apart = scanner, else = keyboard
-let lastKeyTime = 0;
-let scanBuffer  = '';
-let scanTimer   = null;
+/* After qty entered + Enter → re-focus scanner */
+document.addEventListener('DOMContentLoaded', function() {
+  const qtyEl = document.getElementById('palletQty');
+  if (qtyEl) {
+    qtyEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitScan();
+      }
+    });
+  }
+});
 
-function activateScanMode(input) {
-  // Temporarily remove readonly so scanner can type
-  input.removeAttribute('readonly');
-  input.style.cursor = 'text';
-  input.style.background = 'rgba(26,122,46,0.08)';
-  input.style.borderColor = 'var(--accent)';
+/* ════ SCAN-ONLY MODE — BULLETPROOF APPROACH ════
+   Strategy:
+   - palletDisplay = visible readonly field (user sees barcode here)
+   - palletInput   = hidden offscreen field (receives scanner keystrokes)
+   - Scanner types into hidden field at high speed
+   - Enter key triggers: copy to display field → focus qty
+   - Manual keyboard cannot type into visible field (it's readonly)
+   ════════════════════════════════════════════════════════════════ */
+
+let scannerBuffer = '';
+let scannerTimer  = null;
+
+// Called when user clicks the display field — focus hidden input
+function focusScannerInput() {
+  const hidden = document.getElementById('palletInput');
+  if (hidden) {
+    hidden.focus();
+    document.getElementById('scanHintText').textContent = '✅ Ready — scan barcode now...';
+    document.getElementById('palletDisplay').style.borderColor = 'var(--accent)';
+    document.getElementById('palletDisplay').style.boxShadow = '0 0 0 3px rgba(26,122,46,0.15)';
+  }
 }
 
-function deactivateScanMode(input) {
-  // Re-apply readonly when not focused
+// Auto-focus scanner input when scan screen loads
+function initScannerInput() {
   setTimeout(() => {
-    if (document.activeElement !== input) {
-      input.setAttribute('readonly', true);
-      input.style.cursor = 'not-allowed';
-      input.style.background = 'rgba(26,122,46,0.04)';
+    const hidden = document.getElementById('palletInput');
+    if (hidden && document.getElementById('screenScan').classList.contains('active')) {
+      hidden.focus();
     }
-  }, 100);
+  }, 200);
 }
 
-function handlePalletKeydown(event) {
-  const input = event.target;
-  const now   = Date.now();
-  const gap   = now - lastKeyTime;
-  lastKeyTime = now;
-
-  // Enter key — always process (both scanner and keyboard Enter)
+// Handles all keystrokes from scanner/keyboard into hidden field
+function handleScannerKeydown(event) {
+  // Enter = end of barcode scan
   if (event.key === 'Enter') {
     event.preventDefault();
-    const val = input.value.trim();
+    const val = scannerBuffer.trim().toUpperCase();
     if (val.length > 0) {
+      // Set value in hidden input (used by submitScan)
+      document.getElementById('palletInput').value = val;
+      // Show in display field
+      document.getElementById('palletDisplay').value = val;
+      document.getElementById('palletDisplay').style.color = '#1A7A2E';
+      document.getElementById('scanHintText').textContent = '✓ Barcode scanned — enter quantity below';
+      // Reset buffer
+      scannerBuffer = '';
+      clearTimeout(scannerTimer);
+      // Move to qty
       focusQty();
     }
     return;
   }
 
-  // Escape — clear field
+  // Escape = clear everything
   if (event.key === 'Escape') {
-    input.value = '';
-    hideAlerts('scan');
+    clearPalletScan();
     return;
   }
 
-  // Allow: Backspace, Delete, Tab, Arrow keys always
-  const allowedKeys = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'];
-  if (allowedKeys.includes(event.key)) return;
-
-  // For character keys — check if it's scanner speed (< 50ms gap)
-  // Scanner sends chars very fast; human typing is > 100ms between keys
+  // Collect character into buffer
   if (event.key.length === 1) {
-    if (gap > 100 && input.value.length > 0) {
-      // Slow typing detected — block the key
-      event.preventDefault();
-      showAlert('scanWarn', '⚠ Manual typing is disabled. Please use barcode scanner or camera.');
-      return;
-    }
-    // Fast input (scanner) — allow through
+    scannerBuffer += event.key;
+    // Auto-clear buffer if no Enter comes within 3 seconds (stale input)
+    clearTimeout(scannerTimer);
+    scannerTimer = setTimeout(() => {
+      scannerBuffer = '';
+      clearPalletScan(); // clears both hidden + display fields
+    }, 3000);
   }
 }
+
+// oninput handler for hidden field — keep display in sync while scanning
+function onScannerInput() {
+  // Do nothing — we use keydown buffer instead
+  // This prevents any paste or autofill from slipping through
+  const hidden = document.getElementById('palletInput');
+  if (hidden.value !== scannerBuffer) {
+    hidden.value = scannerBuffer;
+  }
+}
+
+// Clear pallet scan fields
+function clearPalletScan() {
+  scannerBuffer = '';
+  clearTimeout(scannerTimer);
+  const hidden   = document.getElementById('palletInput');
+  const display  = document.getElementById('palletDisplay');
+  if (hidden)  { hidden.value = ''; }
+  if (display) {
+    display.value = '';
+    display.style.color = '';
+    display.style.borderColor = '';
+    display.style.boxShadow = '';
+  }
+  document.getElementById('scanHintText').textContent = '🔒 Tap box then scan barcode · 📷 for camera scan';
+  hideAlerts('scan');
+}
+
+// Legacy: keep activateScanMode/deactivateScanMode as no-ops for safety
+function activateScanMode(input) {}
+function deactivateScanMode(input) {}
+function handlePalletKeydown(event) {}
 
 /* ════ SHIFT SELECTION ════ */
 function selectShift(shift) {
@@ -1636,10 +1693,16 @@ function startZXingDecode() {
   zxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, error) => {
     if (result) {
       const code = result.getText();
+      // Fill both hidden input and display field from camera
       document.getElementById('palletInput').value = code;
+      const disp = document.getElementById('palletDisplay');
+      if (disp) {
+        disp.value = code;
+        disp.style.color = '#1A7A2E';
+      }
+      scannerBuffer = code;
       stopCamera();
       showAlert('scanSuccess', '📷 Barcode scanned: ' + code + ' — enter quantity and submit');
-      // Focus qty field after camera scan
       setTimeout(() => focusQty(), 200);
     }
     if (error && !(error instanceof ZXing.NotFoundException)) {
