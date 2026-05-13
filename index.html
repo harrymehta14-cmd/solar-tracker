@@ -460,6 +460,21 @@ tr:hover td { background:rgba(255,255,255,0.02); }
   margin:20px 0;
 }
 
+/* ── SHIFT TABS ── */
+.shift-tabs { display:flex; gap:6px; margin-bottom:14px; }
+.shift-tab {
+  flex:1; padding:8px 4px; text-align:center;
+  background:var(--bg3); border:1.5px solid var(--border);
+  border-radius:8px; font-family:var(--mono); font-size:12px;
+  font-weight:600; color:var(--text3); cursor:pointer;
+  transition:all 0.15s; letter-spacing:0.5px;
+}
+.shift-tab:hover { border-color:var(--accent); color:var(--accent); }
+.shift-tab.selected {
+  background:linear-gradient(135deg,#1A7A2E,#22A03C);
+  border-color:#1A7A2E; color:#fff;
+}
+
 /* ── EMPTY STATE ── */
 .empty-state {
   text-align:center; padding:40px 20px;
@@ -548,21 +563,33 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
     <!-- PO Selector -->
     <div class="card">
-      <div class="card-title">01 — Select Purchase Order</div>
+      <div class="card-title">01 — Shift & Engineer Details</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Shift *</label>
+        <div class="shift-tabs">
+          <div class="shift-tab" id="shiftA" onclick="selectShift('A')">Shift A</div>
+          <div class="shift-tab" id="shiftB" onclick="selectShift('B')">Shift B</div>
+          <div class="shift-tab" id="shiftC" onclick="selectShift('C')">Shift C</div>
+        </div>
+      </div>
       <div class="form-row cols-2">
+        <div class="field">
+          <label>In-charge Name *</label>
+          <input type="text" id="inchargeName" placeholder="Enter your name..." autocomplete="off">
+        </div>
         <div class="field">
           <label>Purchase Order *</label>
           <select id="scanPoSelect" onchange="onPoSelected()">
             <option value="">— Select PO —</option>
           </select>
         </div>
+      </div>
+      <div class="form-row cols-2">
         <div class="field">
           <label>Line Code</label>
           <input type="text" id="scanLineCode" readonly placeholder="Auto-filled from PO"
             style="color:var(--text3);cursor:default;">
         </div>
-      </div>
-      <div class="form-row cols-2">
         <div class="field">
           <label>Material Type *</label>
           <select id="scanMaterialType">
@@ -576,19 +603,14 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             <option>Back EPE</option>
           </select>
         </div>
-        <div class="field">
-          <label>PO Progress</label>
-          <div style="margin-top:6px;">
-            <div class="po-progress-wrap">
-              <div class="po-progress-bar">
-                <div class="po-progress-fill" id="poProgressFill" style="width:0%"></div>
-              </div>
-              <div class="po-progress-label">
-                <span id="poProgressText">Select a PO to see progress</span>
-                <span id="poProgressPct"></span>
-              </div>
-            </div>
-          </div>
+      </div>
+      <div class="po-progress-wrap">
+        <div class="po-progress-bar">
+          <div class="po-progress-fill" id="poProgressFill" style="width:0%"></div>
+        </div>
+        <div class="po-progress-label">
+          <span id="poProgressText">Select a PO to see progress</span>
+          <span id="poProgressPct"></span>
         </div>
       </div>
     </div>
@@ -625,8 +647,8 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
       <div class="form-row cols-2" style="margin-top:10px;">
         <div class="field">
-          <label>Pallet Quantity <span style="color:var(--text3)">(Optional)</span></label>
-          <input type="number" id="palletQty" placeholder="e.g. 30" min="0">
+          <label>Pallet Quantity *</label>
+          <input type="number" id="palletQty" placeholder="e.g. 30" min="1">
         </div>
         <div class="field">
           <label>Remarks <span style="color:var(--text3)">(Optional)</span></label>
@@ -762,6 +784,15 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <div class="card">
       <div class="card-title">Filters</div>
       <div class="filters-bar">
+        <select id="filterPO" onchange="filterRecords()">
+          <option value="">All POs</option>
+        </select>
+        <select id="filterShift" onchange="filterRecords()">
+          <option value="">All Shifts</option>
+          <option>Shift A</option>
+          <option>Shift B</option>
+          <option>Shift C</option>
+        </select>
         <select id="filterLine" onchange="filterRecords()">
           <option value="">All Lines</option>
           <option>Line-01</option><option>Line-02</option><option>Line-03</option>
@@ -779,7 +810,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option>Front POE</option><option>Back EVA</option><option>Back EPE</option>
         </select>
         <input type="date" id="filterDate" onchange="filterRecords()">
-        <input type="text" id="filterSearch" placeholder="Search pallet #..." oninput="filterRecords()" style="flex:1;min-width:140px;">
+        <input type="text" id="filterSearch" placeholder="Search pallet / name..." oninput="filterRecords()" style="flex:1;min-width:140px;">
         <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
         <button class="btn btn-green btn-sm" onclick="exportCSV()">↓ Export CSV</button>
       </div>
@@ -895,6 +926,7 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMugBHWr1QieQrJylmb
 /* ════ APP STATE ════ */
 const ADMIN_PASSWORD = 'admin123'; // Change this!
 let isAdmin = false;
+let selectedShift = ''; // A, B or C
 let allPOs = [];
 let allRecords = [];
 let sessionScans = 0;
@@ -1137,7 +1169,7 @@ function getMockData(action, data) {
   if (action === 'scanPallet') {
     const dup = mockRecords.find(r => r.palletNumber === data.palletNumber);
     if (dup) return { success:false, duplicate:true, error:`Pallet "${data.palletNumber}" already scanned for ${dup.lineCode} on ${dup.scannedOn}` };
-    const rec = { id:String(++mockIdCounter), palletNumber:data.palletNumber, poNumber:data.poNumber, lineCode:data.lineCode, materialType:data.materialType, palletQty:data.palletQty||'', remarks:data.remarks||'', scannedOn:new Date().toLocaleString() };
+    const rec = { id:String(++mockIdCounter), palletNumber:data.palletNumber, poNumber:data.poNumber, lineCode:data.lineCode, materialType:data.materialType, shift:data.shift||'', incharge:data.incharge||'', palletQty:data.palletQty||'', remarks:data.remarks||'', scannedOn:new Date().toLocaleString() };
     mockRecords.unshift(rec);
     const po = mockPOs.find(p => p.poNumber === data.poNumber);
     if (po) { po.receivedQty++; if (po.receivedQty >= po.poQty) po.status = 'Closed'; }
@@ -1244,6 +1276,15 @@ async function closePO(poNumber) {
 }
 
 /* ════ PO SELECTED ════ */
+/* ════ SHIFT SELECTION ════ */
+function selectShift(shift) {
+  selectedShift = shift;
+  ['A','B','C'].forEach(s => {
+    const el = document.getElementById('shift' + s);
+    if (el) el.classList.toggle('selected', s === shift);
+  });
+}
+
 function onPoSelected() {
   const poNumber = document.getElementById('scanPoSelect').value;
   const po = allPOs.find(p => p.poNumber === poNumber);
@@ -1272,17 +1313,22 @@ function onPalletInput() {
 
 /* ════ SUBMIT SCAN ════ */
 async function submitScan() {
-  const poNumber = document.getElementById('scanPoSelect').value;
+  const poNumber     = document.getElementById('scanPoSelect').value;
   const palletNumber = document.getElementById('palletInput').value.trim().toUpperCase();
   const materialType = document.getElementById('scanMaterialType').value;
-  const palletQty = document.getElementById('palletQty').value.trim();
-  const remarks = document.getElementById('palletRemarks').value.trim();
+  const palletQty    = document.getElementById('palletQty').value.trim();
+  const remarks      = document.getElementById('palletRemarks').value.trim();
+  const incharge     = document.getElementById('inchargeName').value.trim();
+  const shift        = selectedShift;
 
   hideAlerts('scan');
 
-  if (!poNumber) { showAlert('scanError', 'Please select a Purchase Order first.'); return; }
-  if (!materialType) { showAlert('scanError', 'Please select Material Type before scanning.'); return; }
-  if (!palletNumber) { showAlert('scanError', 'Pallet number cannot be empty. Please scan or type it.'); return; }
+  if (!shift)        { showAlert('scanError', 'Please select a Shift (A, B or C).'); return; }
+  if (!incharge)     { showAlert('scanError', 'Please enter In-charge Name.'); return; }
+  if (!poNumber)     { showAlert('scanError', 'Please select a Purchase Order.'); return; }
+  if (!materialType) { showAlert('scanError', 'Please select Material Type.'); return; }
+  if (!palletNumber) { showAlert('scanError', 'Pallet number cannot be empty.'); return; }
+  if (!palletQty)    { showAlert('scanError', 'Pallet Quantity is required.'); return; }
 
   const po = allPOs.find(p => p.poNumber === poNumber);
   const lineCode = po ? po.lineCode : '';
@@ -1291,7 +1337,7 @@ async function submitScan() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Checking...';
 
-  const res = await callAPI('scanPallet', { palletNumber, poNumber, lineCode, materialType, palletQty, remarks });
+  const res = await callAPI('scanPallet', { palletNumber, poNumber, lineCode, materialType, palletQty, remarks, incharge, shift });
 
   btn.disabled = false;
   btn.textContent = 'Submit Scan';
@@ -1326,7 +1372,7 @@ async function submitScan() {
     // Add to recent list
     addRecentScan(palletNumber, lineCode, materialType);
 
-    // Clear & refocus for next scan
+    // Clear only pallet fields — keep Shift/Name/PO/Material sticky for next scan
     document.getElementById('palletInput').value = '';
     document.getElementById('palletQty').value = '';
     document.getElementById('palletRemarks').value = '';
@@ -1349,10 +1395,12 @@ function addRecentScan(palletNumber, lineCode, materialType) {
 
   const item = document.createElement('div');
   item.className = 'recent-item';
+  const incharge = document.getElementById('inchargeName').value.trim();
+  const shift    = selectedShift;
   item.innerHTML = `
     <div>
       <div class="recent-pallet">${palletNumber}</div>
-      <div class="recent-meta">${lineCode} · ${materialType}</div>
+      <div class="recent-meta">${lineCode} · ${materialType} · Shift ${shift} · ${incharge}</div>
     </div>
     <div class="recent-time">${now}</div>
   `;
@@ -1386,7 +1434,7 @@ async function toggleCamera() {
     zxingReader = new ZXing.BrowserMultiFormatReader();
 
     // Get available cameras
-    availableCameras = await ZXing.BrowserCodeReader.listVideoInputDevices();
+    availableCameras = await zxingReader.listVideoInputDevices();
     if (availableCameras.length === 0) {
       showAlert('scanError', 'No camera found on this device.');
       stopCamera();
@@ -1454,10 +1502,10 @@ async function switchCamera() {
 
 /* ════ CLEAR FORM ════ */
 function clearScanForm() {
+  // Only clear pallet-specific fields — keep PO/shift/name/material sticky
   document.getElementById('palletInput').value = '';
   document.getElementById('palletQty').value = '';
   document.getElementById('palletRemarks').value = '';
-  document.getElementById('scanMaterialType').value = '';
   hideAlerts('scan');
   document.getElementById('palletInput').focus();
 }
@@ -1467,21 +1515,37 @@ async function loadRecords() {
   const res = await callAPI('getRecords');
   if (res.success) {
     allRecords = res.data || [];
+    // Populate PO filter dropdown
+    const filterPO = document.getElementById('filterPO');
+    if (filterPO) {
+      const poNums = [...new Set(allRecords.map(r => r.poNumber).filter(Boolean))].sort();
+      filterPO.innerHTML = '<option value="">All POs</option>';
+      poNums.forEach(po => {
+        const opt = document.createElement('option');
+        opt.value = po; opt.textContent = po;
+        filterPO.appendChild(opt);
+      });
+    }
     filterRecords();
   }
 }
 
 function filterRecords() {
-  const line = document.getElementById('filterLine').value;
-  const mat = document.getElementById('filterMaterial').value;
-  const date = document.getElementById('filterDate').value;
+  const po     = document.getElementById('filterPO')?.value || '';
+  const shift  = document.getElementById('filterShift')?.value || '';
+  const line   = document.getElementById('filterLine').value;
+  const mat    = document.getElementById('filterMaterial').value;
+  const date   = document.getElementById('filterDate').value;
   const search = document.getElementById('filterSearch').value.toLowerCase();
 
   let filtered = allRecords.filter(r => {
-    if (line && r.lineCode !== line) return false;
-    if (mat && r.materialType !== mat) return false;
-    if (search && !r.palletNumber.toLowerCase().includes(search)) return false;
-    if (date && r.scannedOn && !r.scannedOn.includes(date.split('-').reverse().join('/'))) return false;
+    if (po     && r.poNumber     !== po)      return false;
+    if (shift  && r.shift        !== shift)   return false;
+    if (line   && r.lineCode     !== line)    return false;
+    if (mat    && r.materialType !== mat)     return false;
+    if (search && !r.palletNumber.toLowerCase().includes(search) &&
+                  !(r.incharge||'').toLowerCase().includes(search)) return false;
+    if (date   && r.scannedOn && !r.scannedOn.includes(date.split('-').reverse().join('/'))) return false;
     return true;
   });
 
@@ -1495,7 +1559,7 @@ function renderRecords(records) {
     return;
   }
   let html = `<div class="table-wrap"><table><thead><tr>
-    <th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Qty</th><th>Scanned On</th>
+    <th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th><th>Scanned On</th>
   </tr></thead><tbody>`;
   records.slice(0, 200).forEach(r => {
     html += `<tr>
@@ -1503,6 +1567,8 @@ function renderRecords(records) {
       <td style="font-family:var(--mono);font-size:12px;">${r.poNumber}</td>
       <td>${r.lineCode}</td>
       <td><span class="badge badge-mat">${r.materialType}</span></td>
+      <td style="font-weight:500;color:var(--accent)">${r.shift || '—'}</td>
+      <td>${r.incharge || '—'}</td>
       <td>${r.palletQty || '—'}</td>
       <td style="font-size:11px;color:var(--text3)">${r.scannedOn}</td>
     </tr>`;
@@ -1513,6 +1579,10 @@ function renderRecords(records) {
 }
 
 function clearFilters() {
+  const fpo = document.getElementById('filterPO');
+  const fsh = document.getElementById('filterShift');
+  if (fpo) fpo.value = '';
+  if (fsh) fsh.value = '';
   document.getElementById('filterLine').value = '';
   document.getElementById('filterMaterial').value = '';
   document.getElementById('filterDate').value = '';
@@ -1526,9 +1596,9 @@ function exportCSV() {
   const mat = document.getElementById('filterMaterial').value;
   let data = allRecords.filter(r => (!line || r.lineCode === line) && (!mat || r.materialType === mat));
 
-  let csv = 'Pallet Number,PO Number,Line Code,Material Type,Pallet Qty,Remarks,Scanned On\n';
+  let csv = 'Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Scanned On\n';
   data.forEach(r => {
-    csv += `"${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.palletQty||''}","${r.remarks||''}","${r.scannedOn}"\n`;
+    csv += `"${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${r.scannedOn}"\n`;
   });
   const blob = new Blob([csv], { type:'text/csv' });
   const a = document.createElement('a');
