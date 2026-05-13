@@ -592,15 +592,31 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
         <div class="field">
           <label>Material Type *</label>
-          <select id="scanMaterialType">
+          <select id="scanMaterialType" onchange="onMaterialSelected()">
             <option value="">— Select Material —</option>
             <option>Front Glass</option>
             <option>Back Glass</option>
             <option>Front EPE</option>
             <option>Front EVA</option>
             <option>Front POE</option>
-            <option>Back EVA</option>
+            <option>Back POE</option>
             <option>Back EPE</option>
+            <option>Back EVA</option>
+            <option>Ribbon Spool(0.24mm)</option>
+            <option>Ribbon Spool(0.26mm)</option>
+            <option>Busbar Spool(4*4)mm</option>
+            <option>Busbar Spool(4*6)mm</option>
+            <option>RFID</option>
+            <option>Cell Fixation Tap</option>
+            <option>G2G Tap</option>
+            <option>Tefflon Roll</option>
+            <option>Aluminium Frame</option>
+            <option>RTV Drum</option>
+            <option>Part A</option>
+            <option>Part B</option>
+            <option>Corner</option>
+            <option>JB Cap</option>
+            <option>JB</option>
           </select>
         </div>
       </div>
@@ -625,11 +641,11 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <input type="text" id="palletInput"
             placeholder="Scan or type pallet number..."
             autocomplete="off" autocorrect="off" spellcheck="false"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();submitScan();}"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();focusQty();}"
             oninput="onPalletInput()">
           <div class="barcode-icon" onclick="toggleCamera()" title="Use camera to scan">📷</div>
         </div>
-        <div class="scan-hint">USB scanner auto-submits on Enter · Tap 📷 for ZXing camera scan</div>
+        <div class="scan-hint">USB scanner fills pallet → cursor moves to Qty · Tap 📷 for camera scan</div>
       </div>
 
       <!-- ZXing Camera Scanner -->
@@ -647,8 +663,11 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
       <div class="form-row cols-2" style="margin-top:10px;">
         <div class="field">
-          <label>Pallet Quantity *</label>
-          <input type="number" id="palletQty" placeholder="e.g. 30" min="1">
+          <label>Pallet Quantity * <span id="qtyUnitBadge" style="display:none;background:rgba(26,122,46,0.15);color:#1A7A2E;border:1px solid rgba(26,122,46,0.3);border-radius:20px;font-size:10px;padding:2px 8px;font-family:var(--mono);font-weight:500;letter-spacing:0.5px;margin-left:6px;vertical-align:middle;"></span></label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="number" id="palletQty" placeholder="e.g. 30" min="0" step="any" style="flex:1;">
+            <span id="qtyUnitLabel" style="font-family:var(--mono);font-size:12px;font-weight:600;color:#1A7A2E;white-space:nowrap;min-width:60px;display:none;"></span>
+          </div>
         </div>
         <div class="field">
           <label>Remarks <span style="color:var(--text3)">(Optional)</span></label>
@@ -807,7 +826,15 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option value="">All Materials</option>
           <option>Front Glass</option><option>Back Glass</option>
           <option>Front EPE</option><option>Front EVA</option>
-          <option>Front POE</option><option>Back EVA</option><option>Back EPE</option>
+          <option>Front POE</option><option>Back POE</option>
+          <option>Back EVA</option><option>Back EPE</option>
+          <option>Ribbon Spool(0.24mm)</option><option>Ribbon Spool(0.26mm)</option>
+          <option>Busbar Spool(4*4)mm</option><option>Busbar Spool(4*6)mm</option>
+          <option>RFID</option><option>Cell Fixation Tap</option>
+          <option>G2G Tap</option><option>Tefflon Roll</option>
+          <option>Aluminium Frame</option><option>RTV Drum</option>
+          <option>Part A</option><option>Part B</option>
+          <option>Corner</option><option>JB Cap</option><option>JB</option>
         </select>
         <input type="date" id="filterDate" onchange="filterRecords()">
         <input type="text" id="filterSearch" placeholder="Search pallet / name..." oninput="filterRecords()" style="flex:1;min-width:140px;">
@@ -1276,6 +1303,67 @@ async function closePO(poNumber) {
 }
 
 /* ════ PO SELECTED ════ */
+/* ════ MATERIAL TYPE → UNIT MAP ════ */
+const MATERIAL_UNITS = {
+  'Front Glass':            'nos',
+  'Back Glass':             'nos',
+  'Front EPE':              'sq.m',
+  'Front EVA':              'sq.m',
+  'Front POE':              'sq.m',
+  'Back POE':               'sq.m',
+  'Back EPE':               'sq.m',
+  'Back EVA':               'sq.m',
+  'Ribbon Spool(0.24mm)':   'kg',
+  'Ribbon Spool(0.26mm)':   'kg',
+  'Busbar Spool(4*4)mm':    'kg',
+  'Busbar Spool(4*6)mm':    'kg',
+  'RFID':                   'nos',
+  'Cell Fixation Tap':      'nos',
+  'G2G Tap':                'nos',
+  'Tefflon Roll':           'nos',
+  'Aluminium Frame':        'pallet qty',
+  'RTV Drum':               'kg',
+  'Part A':                 'kg',
+  'Part B':                 'kg',
+  'Corner':                 'nos',
+  'JB Cap':                 'nos',
+  'JB':                     'nos',
+};
+
+/* Called when material type dropdown changes */
+function onMaterialSelected() {
+  const mat  = document.getElementById('scanMaterialType').value;
+  const unit = MATERIAL_UNITS[mat] || '';
+  const badge = document.getElementById('qtyUnitBadge');
+  const label = document.getElementById('qtyUnitLabel');
+  const qtyInput = document.getElementById('palletQty');
+
+  if (unit) {
+    // Show unit badge next to label
+    if (badge) { badge.textContent = unit; badge.style.display = 'inline-block'; }
+    // Show unit after input box
+    if (label) { label.textContent = unit; label.style.display = 'block'; }
+    // Set step: float for kg/sqm, integer for nos/pallet
+    const floatUnits = ['kg', 'sq.m', 'pallet qty'];
+    qtyInput.step = floatUnits.includes(unit) ? '0.01' : '1';
+    qtyInput.placeholder = floatUnits.includes(unit) ? 'e.g. 25.5' : 'e.g. 30';
+  } else {
+    if (badge) { badge.textContent = ''; badge.style.display = 'none'; }
+    if (label) { label.textContent = ''; label.style.display = 'none'; }
+    qtyInput.step = 'any';
+    qtyInput.placeholder = 'e.g. 30';
+  }
+}
+
+/* Focus qty field after barcode scan */
+function focusQty() {
+  const qtyEl = document.getElementById('palletQty');
+  if (qtyEl) {
+    qtyEl.focus();
+    qtyEl.select();
+  }
+}
+
 /* ════ SHIFT SELECTION ════ */
 function selectShift(shift) {
   selectedShift = shift;
@@ -1328,7 +1416,10 @@ async function submitScan() {
   if (!poNumber)     { showAlert('scanError', 'Please select a Purchase Order.'); return; }
   if (!materialType) { showAlert('scanError', 'Please select Material Type.'); return; }
   if (!palletNumber) { showAlert('scanError', 'Pallet number cannot be empty.'); return; }
-  if (!palletQty)    { showAlert('scanError', 'Pallet Quantity is required.'); return; }
+  if (!palletQty || isNaN(parseFloat(palletQty))) {
+    showAlert('scanError', 'Pallet Quantity is required. Enter a number (e.g. 10 or 2.5).');
+    return;
+  }
 
   const po = allPOs.find(p => p.poNumber === poNumber);
   const lineCode = po ? po.lineCode : '';
@@ -1470,9 +1561,9 @@ function startZXingDecode() {
       const code = result.getText();
       document.getElementById('palletInput').value = code;
       stopCamera();
-      showAlert('scanSuccess', '📷 Barcode scanned: ' + code);
-      // Auto-submit after camera scan
-      setTimeout(() => submitScan(), 300);
+      showAlert('scanSuccess', '📷 Barcode scanned: ' + code + ' — enter quantity and submit');
+      // Focus qty field after camera scan
+      setTimeout(() => focusQty(), 200);
     }
     if (error && !(error instanceof ZXing.NotFoundException)) {
       console.warn('ZXing decode error:', error);
@@ -1508,6 +1599,8 @@ function clearScanForm() {
   document.getElementById('palletRemarks').value = '';
   hideAlerts('scan');
   document.getElementById('palletInput').focus();
+  // Re-apply unit from current material selection
+  onMaterialSelected();
 }
 
 /* ════ LOAD RECORDS ════ */
