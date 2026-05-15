@@ -885,20 +885,39 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
     <div class="card">
       <div class="card-title">01 — Scan Pallet to Consume</div>
-      <div class="field" style="margin-bottom:14px;">
-        <label>Pallet Number — Scan Barcode *</label>
+      <div class="field" style="margin-bottom:10px;">
+        <label>Pallet Number *</label>
         <div class="barcode-wrap">
+          <!-- Display field — shows scanned value, blocks manual typing -->
           <input type="text" id="outPalletDisplay"
-            placeholder="🔒 Scan pallet barcode..."
+            placeholder="🔒 Scan barcode — USB or camera"
             readonly
-            style="cursor:default;background:rgba(192,57,43,0.04);font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:2px;border-color:rgba(192,57,43,0.3);">
+            style="cursor:default;background:rgba(192,57,43,0.04);font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:2px;border-color:rgba(192,57,43,0.3);"
+            onclick="focusOutScanner()"
+            tabindex="-1">
+          <!-- Hidden real input — captures scanner keystrokes -->
           <input type="text" id="outPalletInput"
             style="position:absolute;opacity:0;width:1px;height:1px;left:-9999px;"
             autocomplete="off" autocorrect="off" spellcheck="false"
-            onkeydown="handleOutScannerKeydown(event)">
-          <div class="barcode-icon" onclick="focusOutScanner()" title="Click to activate scanner">📷</div>
+            autocapitalize="off"
+            onkeydown="handleOutScannerKeydown(event)"
+            oninput="onOutScannerInput()">
+          <div class="barcode-icon" onclick="toggleOutCamera()" title="Use camera to scan">📷</div>
         </div>
-        <div class="scan-hint" id="outScanHint">🔒 Click box then scan pallet barcode</div>
+        <div class="scan-hint" id="outScanHint">👆 Tap box to activate USB scanner · 📷 for camera scan</div>
+      </div>
+
+      <!-- ZXing Camera Scanner for Scan Out -->
+      <div class="camera-scanner" id="outCameraScanner">
+        <div style="position:relative;">
+          <video id="outCameraFeed" autoplay playsinline muted style="width:100%;max-height:240px;object-fit:cover;display:block;"></video>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:80px;border:2px solid #C0392B;border-radius:6px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0.3);"></div>
+        </div>
+        <div class="camera-overlay" id="outCameraStatus">📷 Point camera at pallet barcode...</div>
+        <div class="camera-controls">
+          <button class="btn btn-danger btn-sm" onclick="stopOutCamera()">✕ Close Camera</button>
+          <button class="btn btn-secondary btn-sm" onclick="switchOutCamera()">🔄 Switch Camera</button>
+        </div>
       </div>
 
       <!-- Pallet Details Card -->
@@ -1039,7 +1058,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
    PASTE YOUR GOOGLE APPS SCRIPT URL BELOW
    ════════════════════════════════════════════════════ */
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk2mHVkpNItlJSyZLfLwlrJ0He842wRk0im-0kivmyCN_hUmdpiz4Bs2ggEOxz0Do43A/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMugBHWr1QieQrJylmbVcSe2S0e1W7jJYFkcu_g1a7wf2WuVOmpYLXaJIcRC3Wt7cVMg/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
 
 /* ════ APP STATE ════ */
 const ADMIN_PASSWORD = 'admin123'; // Change this!
@@ -1058,14 +1077,118 @@ let outScannerBuffer = '';
 let outScannerTimer  = null;
 let outSessionScans  = 0;
 
+/* ════ SCAN OUT SCANNER FUNCTIONS ════ */
+
 function focusOutScanner() {
-  const hidden = document.getElementById('outPalletInput');
-  if (hidden) {
-    hidden.focus();
-    document.getElementById('outScanHint').textContent = '✅ Ready — scan pallet barcode now...';
-    document.getElementById('outPalletDisplay').style.borderColor = '#C0392B';
-    document.getElementById('outPalletDisplay').style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+  const hidden  = document.getElementById('outPalletInput');
+  const display = document.getElementById('outPalletDisplay');
+  const hint    = document.getElementById('outScanHint');
+  if (!hidden) return;
+  hidden.focus();
+  if (display) {
+    display.style.borderColor = '#C0392B';
+    display.style.boxShadow   = '0 0 0 3px rgba(192,57,43,0.15)';
   }
+  if (hint) hint.textContent = '✅ Ready — scan pallet barcode now...';
+}
+
+function onOutScannerInput() {
+  const hidden = document.getElementById('outPalletInput');
+  if (hidden.value !== outScannerBuffer) {
+    hidden.value = outScannerBuffer;
+  }
+}
+
+/* ════ SCAN OUT CAMERA (ZXing) ════ */
+let outZxingReader      = null;
+let outCameraIndex      = 0;
+let outAvailableCameras = [];
+
+async function toggleOutCamera() {
+  const scanner = document.getElementById('outCameraScanner');
+  if (scanner.classList.contains('open')) {
+    stopOutCamera();
+    return;
+  }
+
+  if (typeof ZXing === 'undefined') {
+    showOutAlert('outError', 'Camera library loading... try again in 2 seconds.');
+    return;
+  }
+
+  try {
+    scanner.classList.add('open');
+    document.getElementById('outCameraStatus').textContent = '📷 Starting camera...';
+
+    outZxingReader      = new ZXing.BrowserMultiFormatReader();
+    outAvailableCameras = await outZxingReader.listVideoInputDevices();
+
+    if (outAvailableCameras.length === 0) {
+      showOutAlert('outError', 'No camera found on this device.');
+      stopOutCamera();
+      return;
+    }
+
+    // Prefer back/rear camera on mobile
+    outCameraIndex = outAvailableCameras.findIndex(c =>
+      c.label.toLowerCase().includes('back') ||
+      c.label.toLowerCase().includes('rear') ||
+      c.label.toLowerCase().includes('environment')
+    );
+    if (outCameraIndex === -1) outCameraIndex = 0;
+
+    startOutZXingDecode();
+
+  } catch(e) {
+    console.error('Scan Out camera error:', e);
+    showOutAlert('outError', 'Camera error: ' + e.message);
+    stopOutCamera();
+  }
+}
+
+function startOutZXingDecode() {
+  const deviceId = outAvailableCameras[outCameraIndex]?.deviceId;
+  const videoEl  = document.getElementById('outCameraFeed');
+  const statusEl = document.getElementById('outCameraStatus');
+
+  statusEl.textContent = '🔍 Scanning... point at pallet barcode';
+
+  outZxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, error) => {
+    if (result) {
+      const code = result.getText().trim().toUpperCase();
+      // Fill hidden + display fields
+      document.getElementById('outPalletInput').value   = code;
+      document.getElementById('outPalletDisplay').value = code;
+      document.getElementById('outPalletDisplay').style.color = '#C0392B';
+      outScannerBuffer = code;
+      stopOutCamera();
+      document.getElementById('outScanHint').textContent = '✓ Barcode scanned — fetching details...';
+      // Fetch pallet details
+      fetchPalletForScanOut(code);
+    }
+    if (error && !(error instanceof ZXing.NotFoundException)) {
+      console.warn('Out ZXing error:', error);
+    }
+  });
+}
+
+function stopOutCamera() {
+  try {
+    if (outZxingReader) { outZxingReader.reset(); outZxingReader = null; }
+  } catch(e) { console.warn('stopOutCamera:', e); }
+  const scanner = document.getElementById('outCameraScanner');
+  if (scanner) scanner.classList.remove('open');
+}
+
+function switchOutCamera() {
+  if (outAvailableCameras.length <= 1) {
+    showOutAlert('outWarn', 'Only one camera available.');
+    return;
+  }
+  if (outZxingReader) { outZxingReader.reset(); outZxingReader = null; }
+  outCameraIndex = (outCameraIndex + 1) % outAvailableCameras.length;
+  outZxingReader = new ZXing.BrowserMultiFormatReader();
+  startOutZXingDecode();
 }
 
 function handleOutScannerKeydown(event) {
@@ -1073,10 +1196,10 @@ function handleOutScannerKeydown(event) {
     event.preventDefault();
     const val = outScannerBuffer.trim().toUpperCase();
     if (val.length > 0) {
-      document.getElementById('outPalletInput').value = val;
+      document.getElementById('outPalletInput').value   = val;
       document.getElementById('outPalletDisplay').value = val;
       document.getElementById('outPalletDisplay').style.color = '#C0392B';
-      document.getElementById('outScanHint').textContent = '✓ Pallet scanned — fetching details...';
+      document.getElementById('outScanHint').textContent = '✓ Barcode scanned — fetching details...';
       outScannerBuffer = '';
       clearTimeout(outScannerTimer);
       fetchPalletForScanOut(val);
@@ -1087,6 +1210,7 @@ function handleOutScannerKeydown(event) {
     resetScanOut();
     return;
   }
+  // Accept all printable characters — scanner sends fast
   if (event.key.length === 1) {
     outScannerBuffer += event.key;
     clearTimeout(outScannerTimer);
@@ -1194,13 +1318,20 @@ async function submitScanOut() {
 function resetScanOut() {
   outScannerBuffer = '';
   clearTimeout(outScannerTimer);
-  document.getElementById('outPalletInput').value  = '';
-  document.getElementById('outPalletDisplay').value = '';
-  document.getElementById('outPalletDisplay').style.color = '';
-  document.getElementById('outPalletDisplay').style.borderColor = '';
-  document.getElementById('outPalletDisplay').style.boxShadow = '';
-  document.getElementById('outPalletDetails').style.display = 'none';
-  document.getElementById('outScanHint').textContent = '🔒 Click box then scan pallet barcode';
+  stopOutCamera();
+  const hidden  = document.getElementById('outPalletInput');
+  const display = document.getElementById('outPalletDisplay');
+  if (hidden)  { hidden.value = ''; }
+  if (display) {
+    display.value             = '';
+    display.style.color       = '';
+    display.style.borderColor = 'rgba(192,57,43,0.3)';
+    display.style.boxShadow   = '';
+  }
+  const details = document.getElementById('outPalletDetails');
+  if (details) details.style.display = 'none';
+  const hint = document.getElementById('outScanHint');
+  if (hint) hint.textContent = '👆 Tap box to activate USB scanner · 📷 for camera scan';
   hideOutAlerts();
 }
 
@@ -1283,7 +1414,8 @@ function showScreen(name) {
     setTimeout(() => focusScannerInput(), 200);
   }
   if (name === 'scanout') {
-    setTimeout(() => focusOutScanner(), 200);
+    resetScanOut();
+    setTimeout(() => focusOutScanner(), 300);
   }
   if (name === 'po') loadPOs();
   if (name === 'records') loadRecords();
