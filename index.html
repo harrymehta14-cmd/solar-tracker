@@ -267,20 +267,7 @@ main { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:28p
 .alert-warn { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); color:#FDE68A; }
 .alert-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
 
-/* ── PO PROGRESS BAR ── */
-.po-progress-wrap { margin-top:8px; }
-.po-progress-bar {
-  height:4px; background:var(--bg3); border-radius:2px; overflow:hidden;
-}
-.po-progress-fill {
-  height:100%; border-radius:2px;
-  background: linear-gradient(90deg, #1A7A2E, #22A03C);
-  transition:width 0.4s ease;
-}
-.po-progress-label {
-  font-family:var(--mono); font-size:10px; color:var(--text3);
-  margin-top:4px; display:flex; justify-content:space-between;
-}
+/* ── PO PROGRESS BAR (removed) ── */
 
 /* ── PO LIST TABLE ── */
 .table-wrap { overflow-x:auto; }
@@ -533,8 +520,11 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <button class="nav-btn" onclick="showScreen('po')" id="navPo">
       <span>≡</span> <span>PO Mgmt</span>
     </button>
-	<button class="nav-btn active" onclick="showScreen('scan')" id="navScan">
-      <span>⬡</span> <span>Scan</span>
+    <button class="nav-btn active" onclick="showScreen('scan')" id="navScan">
+      <span>⬇</span> <span>Scan In</span>
+    </button>
+    <button class="nav-btn" onclick="showScreen('scanout')" id="navScanout">
+      <span>⬆</span> <span>Scan Out</span>
     </button>
     <button class="nav-btn" onclick="showScreen('records')" id="navRecords">
       <span>◫</span> <span>Records</span>
@@ -617,9 +607,9 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             <option>Busbar Spool(4*4)mm</option>
             <option>Busbar Spool(4*6)mm</option>
             <option>RFID</option>
-            <option>Cell Fixation Tap</option>
-            <option>G2G Tap</option>
-            <option>Tefflon Roll</option>
+            <option>Cell Fixation Tape</option>
+            <option>G2G Tape</option>
+            <option>Teflon Roll</option>
             <option>Aluminium Frame</option>
             <option>RTV Drum</option>
             <option>Part A</option>
@@ -630,19 +620,11 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           </select>
         </div>
       </div>
-      <div class="po-progress-wrap">
-        <div class="po-progress-bar">
-          <div class="po-progress-fill" id="poProgressFill" style="width:0%"></div>
-        </div>
-        <div class="po-progress-label">
-          <span id="poProgressText">Select a PO to see progress</span>
-          <span id="poProgressPct"></span>
-        </div>
-      </div>
+      <!-- PO progress removed as per requirement -->
     </div>
 
     <!-- Barcode Scanner -->
-    <div class="card">
+    <div class="card" id="barcodeScanCard">
       <div class="card-title">02 — Scan Pallet Barcode</div>
 
       <div class="field" style="margin-bottom:10px;">
@@ -883,7 +865,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     </div>
     <div class="card">
       <div class="card-title" style="justify-content:space-between;">
-        <span>PO Progress Overview</span>
+        <span>PO Overview</span>
         <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">↻ Refresh</button>
       </div>
       <div id="dashboardWrap">
@@ -893,7 +875,101 @@ tr:hover td { background:rgba(255,255,255,0.02); }
   </div>
 
   <!-- ╔══════════════════════════════╗ -->
-  <!-- ║   SCREEN 5 — SETUP GUIDE    ║ -->
+  <!-- ║   SCREEN 5 — SCAN OUT       ║ -->
+  <!-- ╚══════════════════════════════╝ -->
+  <div class="screen" id="screenScanout">
+    <div class="section-header">
+      <div class="section-title">Scan Out</div>
+      <div class="section-sub">Scan pallet barcode to mark material as consumed on line</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">01 — Scan Pallet to Consume</div>
+      <div class="field" style="margin-bottom:14px;">
+        <label>Pallet Number — Scan Barcode *</label>
+        <div class="barcode-wrap">
+          <input type="text" id="outPalletDisplay"
+            placeholder="🔒 Scan pallet barcode..."
+            readonly
+            style="cursor:default;background:rgba(192,57,43,0.04);font-family:var(--mono);font-size:16px;font-weight:600;letter-spacing:2px;border-color:rgba(192,57,43,0.3);">
+          <input type="text" id="outPalletInput"
+            style="position:absolute;opacity:0;width:1px;height:1px;left:-9999px;"
+            autocomplete="off" autocorrect="off" spellcheck="false"
+            onkeydown="handleOutScannerKeydown(event)">
+          <div class="barcode-icon" onclick="focusOutScanner()" title="Click to activate scanner">📷</div>
+        </div>
+        <div class="scan-hint" id="outScanHint">🔒 Click box then scan pallet barcode</div>
+      </div>
+
+      <!-- Pallet Details Card -->
+      <div id="outPalletDetails" style="display:none;">
+        <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:14px;border:1px solid var(--border);">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-family:var(--mono);">Pallet Details</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">PO Number</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text);font-family:var(--mono);" id="outPONumber">—</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Material Type</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text);" id="outMaterialType">—</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Quantity</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text);" id="outQty">—</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Scan In Time</div>
+              <div style="font-size:13px;color:var(--text2);" id="outInTime">—</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Line</div>
+              <div style="font-size:14px;font-weight:600;color:var(--text);" id="outLineCode">—</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text3);margin-bottom:3px;">Current Status</div>
+              <div style="font-size:13px;font-weight:600;" id="outStatus">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-error" id="outError">
+          <span class="alert-icon">⚠</span>
+          <span id="outErrorMsg">Error</span>
+        </div>
+        <div class="alert alert-success" id="outSuccess">
+          <span class="alert-icon">✓</span>
+          <span id="outSuccessMsg">Scan Out successful!</span>
+        </div>
+        <div class="alert alert-warn" id="outWarn">
+          <span class="alert-icon">!</span>
+          <span id="outWarnMsg">Warning</span>
+        </div>
+
+        <button class="btn btn-primary btn-full" id="outSubmitBtn" onclick="submitScanOut()" style="margin-top:6px;">
+          ✓ Confirm Scan Out — Mark as Finished
+        </button>
+      </div>
+    </div>
+
+    <!-- Session Stats -->
+    <div class="card" style="text-align:center;">
+      <div class="card-title" style="justify-content:center;">Scan Out Session</div>
+      <div class="scan-counter" id="outSessionCount" style="color:#C0392B;">0</div>
+      <div class="scan-counter-label">Pallets scanned out this session</div>
+      <hr class="divider">
+      <div class="card-title" style="justify-content:center;margin-top:0;">Recent Scan Outs</div>
+      <div class="recent-list" id="outRecentList">
+        <div class="empty-state">
+          <div class="empty-state-icon">⬆</div>
+          <div class="empty-state-text">No scan outs yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════╗ -->
+  <!-- ║   SCREEN 6 — SETUP GUIDE    ║ -->
   <!-- ╚══════════════════════════════╝ -->
   <div class="screen" id="screenSetup">
     <div class="section-header">
@@ -963,7 +1039,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
    PASTE YOUR GOOGLE APPS SCRIPT URL BELOW
    ════════════════════════════════════════════════════ */
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyMugBHWr1QieQrJylmbVcSe2S0e1W7jJYFkcu_g1a7wf2WuVOmpYLXaJIcRC3Wt7cVMg/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk2mHVkpNItlJSyZLfLwlrJ0He842wRk0im-0kivmyCN_hUmdpiz4Bs2ggEOxz0Do43A/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
 
 /* ════ APP STATE ════ */
 const ADMIN_PASSWORD = 'admin123'; // Change this!
@@ -975,6 +1051,193 @@ let sessionScans = 0;
 let cameraStream = null;
 
 /* ════ INIT ════ */
+/* ════════════════════════════════════════════════════════
+   SCAN OUT FUNCTIONS
+   ════════════════════════════════════════════════════════ */
+let outScannerBuffer = '';
+let outScannerTimer  = null;
+let outSessionScans  = 0;
+
+function focusOutScanner() {
+  const hidden = document.getElementById('outPalletInput');
+  if (hidden) {
+    hidden.focus();
+    document.getElementById('outScanHint').textContent = '✅ Ready — scan pallet barcode now...';
+    document.getElementById('outPalletDisplay').style.borderColor = '#C0392B';
+    document.getElementById('outPalletDisplay').style.boxShadow = '0 0 0 3px rgba(192,57,43,0.15)';
+  }
+}
+
+function handleOutScannerKeydown(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const val = outScannerBuffer.trim().toUpperCase();
+    if (val.length > 0) {
+      document.getElementById('outPalletInput').value = val;
+      document.getElementById('outPalletDisplay').value = val;
+      document.getElementById('outPalletDisplay').style.color = '#C0392B';
+      document.getElementById('outScanHint').textContent = '✓ Pallet scanned — fetching details...';
+      outScannerBuffer = '';
+      clearTimeout(outScannerTimer);
+      fetchPalletForScanOut(val);
+    }
+    return;
+  }
+  if (event.key === 'Escape') {
+    resetScanOut();
+    return;
+  }
+  if (event.key.length === 1) {
+    outScannerBuffer += event.key;
+    clearTimeout(outScannerTimer);
+    outScannerTimer = setTimeout(() => { outScannerBuffer = ''; }, 3000);
+  }
+}
+
+async function fetchPalletForScanOut(palletNumber) {
+  hideOutAlerts();
+  const outBtn = document.getElementById('outSubmitBtn');
+  if (outBtn) outBtn.disabled = true;
+
+  // Search in allRecords first (already loaded)
+  let rec = allRecords.find(r => r.palletNumber === palletNumber);
+
+  if (!rec) {
+    // Try fetching fresh from API
+    const res = await callAPI('getRecords');
+    if (res.success) {
+      allRecords = res.data || [];
+      rec = allRecords.find(r => r.palletNumber === palletNumber);
+    }
+  }
+
+  if (!rec) {
+    showOutAlert('outError', `Pallet "${palletNumber}" not found in Scan In records. Please scan a valid pallet.`);
+    document.getElementById('outPalletDetails').style.display = 'none';
+    return;
+  }
+
+  // Check if already scanned out
+  if (rec.scanOutTime) {
+    showOutAlert('outWarn', `⚠ Pallet "${palletNumber}" already scanned out at ${rec.scanOutTime}. Status: Finished.`);
+  }
+
+  // Show pallet details
+  document.getElementById('outPONumber').textContent     = rec.poNumber || '—';
+  document.getElementById('outMaterialType').textContent = rec.materialType || '—';
+  document.getElementById('outQty').textContent          = rec.palletQty ? rec.palletQty + ' ' + (MATERIAL_UNITS[rec.materialType] || '') : '—';
+  document.getElementById('outLineCode').textContent     = rec.lineCode || '—';
+  document.getElementById('outInTime').textContent       = rec.scannedOn || '—';
+
+  const statusEl = document.getElementById('outStatus');
+  if (rec.scanOutTime) {
+    statusEl.textContent = 'Finished';
+    statusEl.style.color = '#888';
+    if (outBtn) outBtn.disabled = true;
+    if (outBtn) outBtn.textContent = '✓ Already Finished';
+  } else {
+    statusEl.textContent = 'In Stock';
+    statusEl.style.color = '#1A7A2E';
+    if (outBtn) { outBtn.disabled = false; outBtn.textContent = '✓ Confirm Scan Out — Mark as Finished'; }
+  }
+
+  document.getElementById('outPalletDetails').style.display = 'block';
+}
+
+async function submitScanOut() {
+  const palletNumber = document.getElementById('outPalletInput').value.trim();
+  if (!palletNumber) {
+    showOutAlert('outError', 'Please scan a pallet barcode first.');
+    return;
+  }
+
+  const btn = document.getElementById('outSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing...';
+
+  const res = await callAPI('scanOut', { palletNumber });
+
+  btn.disabled = false;
+  btn.textContent = '✓ Confirm Scan Out — Mark as Finished';
+
+  if (res.success) {
+    outSessionScans++;
+    document.getElementById('outSessionCount').textContent = outSessionScans;
+    showOutAlert('outSuccess', `✓ Pallet "${palletNumber}" scanned out — Status: Finished`);
+
+    // Add to recent scan out list
+    addOutRecentScan(palletNumber,
+      document.getElementById('outMaterialType').textContent,
+      document.getElementById('outPONumber').textContent);
+
+    // Update status display
+    document.getElementById('outStatus').textContent = 'Finished';
+    document.getElementById('outStatus').style.color = '#888';
+    btn.disabled = true;
+    btn.textContent = '✓ Already Finished';
+
+    // Update in allRecords
+    const rec = allRecords.find(r => r.palletNumber === palletNumber);
+    if (rec) rec.scanOutTime = new Date().toLocaleString();
+
+    // Reset for next scan after 2 seconds
+    setTimeout(() => {
+      resetScanOut();
+      focusOutScanner();
+    }, 2500);
+
+  } else {
+    showOutAlert('outError', res.error || 'Scan out failed. Please try again.');
+  }
+}
+
+function resetScanOut() {
+  outScannerBuffer = '';
+  clearTimeout(outScannerTimer);
+  document.getElementById('outPalletInput').value  = '';
+  document.getElementById('outPalletDisplay').value = '';
+  document.getElementById('outPalletDisplay').style.color = '';
+  document.getElementById('outPalletDisplay').style.borderColor = '';
+  document.getElementById('outPalletDisplay').style.boxShadow = '';
+  document.getElementById('outPalletDetails').style.display = 'none';
+  document.getElementById('outScanHint').textContent = '🔒 Click box then scan pallet barcode';
+  hideOutAlerts();
+}
+
+function addOutRecentScan(palletNumber, materialType, poNumber) {
+  const list = document.getElementById('outRecentList');
+  const now  = new Date().toLocaleTimeString();
+  const emptyState = list.querySelector('.empty-state');
+  if (emptyState) emptyState.remove();
+  const item = document.createElement('div');
+  item.className = 'recent-item';
+  item.innerHTML = `
+    <div>
+      <div class="recent-pallet">${palletNumber}</div>
+      <div class="recent-meta">${poNumber} · ${materialType}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+      <span style="font-size:10px;color:#C0392B;font-weight:500;background:rgba(192,57,43,0.1);padding:1px 6px;border-radius:10px;">FINISHED</span>
+      <span class="recent-time">${now}</span>
+    </div>`;
+  list.insertBefore(item, list.firstChild);
+  while (list.children.length > 8) list.removeChild(list.lastChild);
+}
+
+function showOutAlert(id, msg) {
+  hideOutAlerts();
+  const el    = document.getElementById(id);
+  const msgEl = document.getElementById(id + 'Msg');
+  if (msgEl) msgEl.textContent = msg;
+  if (el) { el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 7000); }
+}
+function hideOutAlerts() {
+  ['outError','outSuccess','outWarn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('show');
+  });
+}
+
 window.onload = () => {
   checkConfig();
   if (SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com')) {
@@ -1010,14 +1273,17 @@ function saveScriptUrl() {
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const screens = { scan:'screenScan', po:'screenPo', records:'screenRecords', dashboard:'screenDashboard', setup:'screenSetup' };
-  const navs = { scan:'navScan', po:'navPo', records:'navRecords', dashboard:'navDashboard' };
+  const screens = { scan:'screenScan', po:'screenPo', records:'screenRecords', dashboard:'screenDashboard', setup:'screenSetup', scanout:'screenScanout' };
+  const navs = { scan:'navScan', po:'navPo', records:'navRecords', dashboard:'navDashboard', scanout:'navScanout' };
   document.getElementById(screens[name]).classList.add('active');
   if (navs[name]) document.getElementById(navs[name]).classList.add('active');
 
   if (name === 'scan') {
     loadPOs();
     setTimeout(() => focusScannerInput(), 200);
+  }
+  if (name === 'scanout') {
+    setTimeout(() => focusOutScanner(), 200);
   }
   if (name === 'po') loadPOs();
   if (name === 'records') loadRecords();
@@ -1209,14 +1475,19 @@ function getMockData(action, data) {
     mockPOs.push(po);
     return { success:true, message:'PO added (demo mode)' };
   }
+  if (action === 'scanOut') {
+    const rec = mockRecords.find(r => r.palletNumber === data.palletNumber);
+    if (!rec) return { success: false, error: 'Pallet not found.' };
+    if (rec.scanOutTime) return { success: false, error: 'Already scanned out.' };
+    rec.scanOutTime = new Date().toLocaleString();
+    return { success: true, message: 'Scan out successful.' };
+  }
   if (action === 'scanPallet') {
     const dup = mockRecords.find(r => r.palletNumber === data.palletNumber);
     if (dup) return { success:false, duplicate:true, error:`Pallet "${data.palletNumber}" already scanned for ${dup.lineCode} on ${dup.scannedOn}` };
     const rec = { id:String(++mockIdCounter), palletNumber:data.palletNumber, poNumber:data.poNumber, lineCode:data.lineCode, materialType:data.materialType, shift:data.shift||'', incharge:data.incharge||'', palletQty:data.palletQty||'', remarks:data.remarks||'', scannedOn:new Date().toLocaleString() };
     mockRecords.unshift(rec);
-    const po = mockPOs.find(p => p.poNumber === data.poNumber);
-    if (po) { po.receivedQty++; if (po.receivedQty >= po.poQty) po.status = 'Closed'; }
-    return { success:true, message:'Pallet scanned (demo mode)', autoClosed: po && po.status==='Closed' };
+    return { success:true, message:'Pallet scanned (demo mode)', autoClosed: false };
   }
   if (action === 'updatePOStatus') {
     const po = mockPOs.find(p => p.poNumber === data.poNumber);
@@ -1255,17 +1526,13 @@ function renderPOTable() {
     wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">≡</div><div class="empty-state-text">No POs found</div></div>';
     return;
   }
-  let html = '<div class="table-wrap"><table><thead><tr><th>PO Number</th><th>Line</th><th>Progress</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+  let html = '<div class="table-wrap"><table><thead><tr><th>PO Number</th><th>Line</th><th>PO Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>';
   allPOs.forEach(po => {
-    const pct = po.poQty > 0 ? Math.min(100, Math.round((po.receivedQty / po.poQty) * 100)) : 0;
     const isAdmin_ = isAdmin;
     html += `<tr>
       <td style="font-family:var(--mono);font-weight:500;color:var(--text)">${po.poNumber}</td>
       <td>${po.lineCode}</td>
-      <td style="min-width:120px;">
-        <div class="po-progress-bar"><div class="po-progress-fill" style="width:${pct}%"></div></div>
-        <div class="po-progress-label"><span>${po.receivedQty}/${po.poQty}</span><span>${pct}%</span></div>
-      </td>
+      <td style="font-family:var(--mono);font-weight:500;">${po.poQty}</td>
       <td><span class="badge ${po.status==='Open'?'badge-open':'badge-closed'}">${po.status}</span></td>
       <td>${isAdmin_ && po.status==='Open' ? `<button class="btn btn-danger btn-sm" onclick="closePO('${po.poNumber}')">Close PO</button>` : '—'}</td>
     </tr>`;
@@ -1347,19 +1614,24 @@ const MATERIAL_UNITS = {
 };
 
 /* Called when material type dropdown changes */
+/* Materials with no pallet barcode — skip scan box, go straight to qty */
+const NO_BARCODE_MATERIALS = new Set([
+  'RFID',
+  'Cell Fixation Tap',
+  'G2G Tap',
+  'Tefflon Roll'
+]);
+
 function onMaterialSelected() {
-  const mat  = document.getElementById('scanMaterialType').value;
-  const unit = MATERIAL_UNITS[mat] || '';
-  const badge = document.getElementById('qtyUnitBadge');
-  const label = document.getElementById('qtyUnitLabel');
+  const mat      = document.getElementById('scanMaterialType').value;
+  const unit     = MATERIAL_UNITS[mat] || '';
+  const badge    = document.getElementById('qtyUnitBadge');
+  const label    = document.getElementById('qtyUnitLabel');
   const qtyInput = document.getElementById('palletQty');
 
   if (unit) {
-    // Show unit badge next to label
     if (badge) { badge.textContent = unit; badge.style.display = 'inline-block'; }
-    // Show unit after input box
     if (label) { label.textContent = unit; label.style.display = 'block'; }
-    // Set step: float for kg/sqm, integer for nos/pallet
     const floatUnits = ['kg', 'sq.m', 'pallet qty'];
     qtyInput.step = floatUnits.includes(unit) ? '0.01' : '1';
     qtyInput.placeholder = floatUnits.includes(unit) ? 'e.g. 25.5' : 'e.g. 30';
@@ -1369,6 +1641,30 @@ function onMaterialSelected() {
     qtyInput.step = 'any';
     qtyInput.placeholder = 'e.g. 30';
   }
+
+  // Show/hide barcode scan section based on material type
+  const barcodeCard = document.getElementById('barcodeScanCard');
+  if (barcodeCard) {
+    if (NO_BARCODE_MATERIALS.has(mat)) {
+      // Hide barcode card — not needed for this material
+      barcodeCard.style.display = 'none';
+      // Auto-generate a reference number so submitScan has a value
+      clearPalletScan();
+      const autoRef = 'NOBC-' + Date.now().toString().slice(-8);
+      document.getElementById('palletInput').value = autoRef;
+      const disp = document.getElementById('palletDisplay');
+      if (disp) { disp.value = '(No barcode — ' + mat + ')'; disp.style.color = '#888'; }
+      scannerBuffer = autoRef;
+      // Jump focus directly to qty
+      setTimeout(() => focusQty(), 100);
+    } else {
+      barcodeCard.style.display = 'block';
+      clearPalletScan();
+    }
+  }
+
+  // Show/hide image section
+  if (typeof showHideImageSection === 'function') showHideImageSection(mat);
 }
 
 /* Focus qty field after barcode scan */
@@ -1513,17 +1809,12 @@ function onPoSelected() {
   if (po) {
     document.getElementById('scanLineCode').value = po.lineCode;
     // Material Type is now selected by engineer — not auto-filled from PO
-    const pct = po.poQty > 0 ? Math.min(100, Math.round((po.receivedQty / po.poQty) * 100)) : 0;
-    document.getElementById('poProgressFill').style.width = pct + '%';
-    document.getElementById('poProgressText').textContent = `${po.receivedQty} of ${po.poQty} received`;
-    document.getElementById('poProgressPct').textContent = pct + '%';
+    // Progress bar removed
     document.getElementById('palletInput').focus();
   } else {
     document.getElementById('scanLineCode').value = '';
     document.getElementById('scanMaterialType').value = '';
-    document.getElementById('poProgressFill').style.width = '0%';
-    document.getElementById('poProgressText').textContent = 'Select a PO to see progress';
-    document.getElementById('poProgressPct').textContent = '';
+    // Progress bar removed
   }
   hideAlerts('scan');
 }
@@ -1576,21 +1867,10 @@ async function submitScan() {
     sessionScans++;
     document.getElementById('sessionCount').textContent = sessionScans;
 
-    // Update progress
-    if (po) {
-      po.receivedQty = (po.receivedQty || 0) + 1;
-      const pct = Math.min(100, Math.round((po.receivedQty / po.poQty) * 100));
-      document.getElementById('poProgressFill').style.width = pct + '%';
-      document.getElementById('poProgressText').textContent = `${po.receivedQty} of ${po.poQty} received`;
-      document.getElementById('poProgressPct').textContent = pct + '%';
-    }
+    // Progress tracking removed
 
-    // Auto-close notification
-    if (res.autoClosed) {
-      showAlert('scanWarn', `🎉 PO "${poNumber}" is now CLOSED — all ${po?.poQty} pallets received!`);
-      if (po) po.status = 'Closed';
-      renderPODropdown();
-    } else {
+    // Auto-close removed
+    {
       showAlert('scanSuccess', `✓ Pallet "${palletNumber}" scanned successfully!${SCRIPT_URL?'':' (Demo mode)'}`);
     }
 
@@ -1792,10 +2072,18 @@ function renderRecords(records) {
     return;
   }
   let html = `<div class="table-wrap"><table><thead><tr>
-    <th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th><th>Scanned On</th>
+    <th>Status</th><th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th><th>Photo</th><th>Scan In Time</th><th>Scan Out Time</th>
   </tr></thead><tbody>`;
   records.slice(0, 200).forEach(r => {
+    const isFinished = r.scanOutTime && r.scanOutTime.length > 0;
+    const statusBadge = isFinished
+      ? `<span class="badge" style="background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#888;">■ Finished</span>`
+      : `<span class="badge badge-open">● In Stock</span>`;
+    const imgCell = r.imageData
+      ? `<td style="text-align:center;"><img src="${r.imageData}" style="height:40px;width:50px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="viewImage('${r.palletNumber}','${r.imageData}')" title="Click to view"></td>`
+      : `<td style="text-align:center;color:var(--text3);font-size:11px;">${r.hasImage||'—'}</td>`;
     html += `<tr>
+      <td>${statusBadge}</td>
       <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${r.palletNumber}</td>
       <td style="font-family:var(--mono);font-size:12px;">${r.poNumber}</td>
       <td>${r.lineCode}</td>
@@ -1803,7 +2091,9 @@ function renderRecords(records) {
       <td style="font-weight:500;color:var(--accent)">${r.shift || '—'}</td>
       <td>${r.incharge || '—'}</td>
       <td>${r.palletQty || '—'}</td>
+      ${imgCell}
       <td style="font-size:11px;color:var(--text3)">${r.scannedOn}</td>
+      <td style="font-size:11px;color:#C0392B;">${r.scanOutTime || '—'}</td>
     </tr>`;
   });
   html += '</tbody></table></div>';
@@ -1829,9 +2119,10 @@ function exportCSV() {
   const mat = document.getElementById('filterMaterial').value;
   let data = allRecords.filter(r => (!line || r.lineCode === line) && (!mat || r.materialType === mat));
 
-  let csv = 'Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Scanned On\n';
+  let csv = 'Status,Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Scan In Time,Scan Out Time\n';
   data.forEach(r => {
-    csv += `"${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${r.scannedOn}"\n`;
+    const status = (r.scanOutTime && r.scanOutTime.length > 0) ? 'Finished' : 'In Stock';
+    csv += `"${status}","${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${r.scannedOn}","${r.scanOutTime||''}"\n`;
   });
   const blob = new Blob([csv], { type:'text/csv' });
   const a = document.createElement('a');
@@ -1866,22 +2157,12 @@ async function loadDashboard() {
   }
   let html = '';
   allPOs.forEach(po => {
-    const pct = po.poQty > 0 ? Math.min(100, Math.round((po.receivedQty / po.poQty) * 100)) : 0;
-    html += `<div style="margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <div>
-          <span style="font-family:var(--mono);font-weight:600;color:var(--text);font-size:13px;">${po.poNumber}</span>
-          <span style="font-size:12px;color:var(--text3);margin-left:10px;">${po.lineCode} · ${po.materialType}</span>
-        </div>
-        <span class="badge ${po.status==='Open'?'badge-open':'badge-closed'}">${po.status}</span>
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);">
+      <div>
+        <div style="font-family:var(--mono);font-weight:600;color:var(--text);font-size:13px;">${po.poNumber}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;">${po.lineCode} · PO Qty: ${po.poQty}</div>
       </div>
-      <div class="po-progress-bar">
-        <div class="po-progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':'linear-gradient(90deg,var(--accent),#D97706)'}"></div>
-      </div>
-      <div class="po-progress-label">
-        <span>${po.receivedQty} of ${po.poQty} pallets received</span>
-        <span style="font-weight:600;color:${pct===100?'var(--green)':'var(--accent)'}">${pct}%</span>
-      </div>
+      <span class="badge ${po.status==='Open'?'badge-open':'badge-closed'}">${po.status}</span>
     </div>`;
   });
   wrap.innerHTML = html;
