@@ -1606,7 +1606,61 @@ function callAPI(action, data = {}) {
   if (!SCRIPT_URL) {
     return Promise.resolve(getMockData(action, data));
   }
+
+  // Use POST fetch for scanPallet with image — JSONP URL too long for base64
+  if (action === 'scanPallet' && data.imageData && data.imageData.length > 100) {
+    return postFetch(action, data);
+  }
+
   return jsonpCall(action, data);
+}
+
+/* POST fetch — used for image uploads (avoids URL length limit) */
+async function postFetch(action, data) {
+  try {
+    // Separate image from other data
+    const imageData = data.imageData || '';
+    const scanData  = Object.assign({}, data);
+    delete scanData.imageData;
+
+    // Step 1 — Save scan without image via JSONP (fast, reliable)
+    const scanRes = await jsonpCall(action, scanData);
+    if (!scanRes.success) return scanRes;
+
+    // Step 2 — Upload image separately if present
+    if (imageData && imageData.length > 100) {
+      try {
+        // Send image via fetch POST to Apps Script
+        const formData = new URLSearchParams();
+        formData.append('action',      'uploadImage');
+        formData.append('palletNumber', data.palletNumber || '');
+        formData.append('imageData',    imageData);
+
+        const res  = await fetch(SCRIPT_URL, {
+          method:      'POST',
+          credentials: 'omit',
+          redirect:    'follow',
+          headers:     { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body:        formData.toString()
+        });
+        const text = await res.text();
+        const clean = text.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
+        const imgRes = JSON.parse(clean || '{}');
+        if (imgRes.driveLink) {
+          console.log('Image uploaded to Drive:', imgRes.driveLink);
+        }
+      } catch(imgErr) {
+        // Image upload failed — scan already saved, just log
+        console.warn('Image upload failed (scan saved OK):', imgErr.message);
+      }
+    }
+
+    return scanRes;
+
+  } catch(e) {
+    console.error('postFetch error:', e);
+    return { success: false, error: 'Connection failed: ' + e.message };
+  }
 }
 
 /* Primary method — JSONP (works cross-origin) */
