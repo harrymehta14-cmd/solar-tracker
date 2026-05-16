@@ -453,6 +453,52 @@ tr:hover td { background:rgba(255,255,255,0.02); }
   .filters-bar { flex-direction:column; }
 }
 
+/* ── IMAGE UPLOAD ── */
+.img-upload-section {
+  margin-top:12px;
+  border:2px dashed var(--border2);
+  border-radius:10px; padding:14px;
+  background:rgba(26,122,46,0.03);
+  transition:all 0.2s;
+}
+.img-upload-section.img-has-photo {
+  border-color:var(--accent); border-style:solid;
+  background:rgba(26,122,46,0.05);
+}
+.img-upload-label {
+  font-family:var(--mono); font-size:10px; font-weight:600;
+  letter-spacing:0.8px; text-transform:uppercase; color:var(--text2);
+  margin-bottom:10px; display:flex; align-items:center; gap:8px;
+}
+.img-badge-opt {
+  background:rgba(26,122,46,0.12); border:1px solid rgba(26,122,46,0.3);
+  color:var(--accent); border-radius:20px; font-size:9px;
+  padding:2px 8px; font-weight:600;
+}
+.img-capture-btn {
+  width:100%; padding:12px 16px;
+  background:linear-gradient(135deg,#1A7A2E,#22A03C);
+  color:#fff; border:none; border-radius:8px;
+  font-family:var(--sans); font-size:14px; font-weight:600;
+  cursor:pointer; display:flex; align-items:center;
+  justify-content:center; gap:8px; transition:opacity 0.15s;
+}
+.img-capture-btn:hover { opacity:0.9; }
+.img-capture-btn:active { transform:scale(0.98); }
+.img-preview-wrap { display:none; position:relative; margin-top:10px; }
+.img-preview {
+  width:100%; max-height:220px; object-fit:cover;
+  border-radius:8px; display:block; border:2px solid var(--accent);
+}
+.img-retake-btn {
+  position:absolute; top:8px; right:8px;
+  background:rgba(0,0,0,0.65); color:#fff; border:none;
+  border-radius:6px; padding:5px 12px; font-size:12px;
+  font-weight:500; cursor:pointer;
+}
+.img-size-note { font-size:11px; color:var(--text3); margin-top:6px; text-align:center; }
+.img-tick { text-align:center; color:var(--accent); font-size:12px; font-weight:500; margin-top:6px; }
+
 /* ── DIVIDER ── */
 .divider {
   border:none; border-top:1px solid var(--border);
@@ -625,10 +671,10 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
     <!-- Barcode Scanner -->
     <div class="card" id="barcodeScanCard">
-      <div class="card-title">02 — Scan Pallet Barcode</div>
+      <div class="card-title" id="barcodeScanTitle">02 — Scan Pallet Barcode</div>
 
       <div class="field" style="margin-bottom:10px;">
-        <label>Pallet Number *</label>
+        <label id="palletNumLabel">Pallet Number *</label>
         <div class="barcode-wrap">
           <!-- Display field — shows scanned value, blocks manual typing -->
           <input type="text" id="palletDisplay"
@@ -662,11 +708,17 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
       </div>
 
-      <div class="form-row cols-2" style="margin-top:10px;">
+    </div>
+
+    <!-- 03 — Qty, Image, Submit — always visible -->
+    <div class="card" id="qtySubmitCard">
+      <div class="card-title">03 — Quantity & Submit</div>
+      <div class="form-row cols-2">
         <div class="field">
           <label>Pallet Quantity * <span id="qtyUnitBadge" style="display:none;background:rgba(26,122,46,0.15);color:#1A7A2E;border:1px solid rgba(26,122,46,0.3);border-radius:20px;font-size:10px;padding:2px 8px;font-family:var(--mono);font-weight:500;letter-spacing:0.5px;margin-left:6px;vertical-align:middle;"></span></label>
           <div style="display:flex;align-items:center;gap:8px;">
-            <input type="number" id="palletQty" placeholder="Enter Qty" min="0" step="any" style="flex:1;">
+            <input type="number" id="palletQty" placeholder="Enter Qty" min="0" step="any" style="flex:1;"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();submitScan();}">
             <span id="qtyUnitLabel" style="font-family:var(--mono);font-size:12px;font-weight:600;color:#1A7A2E;white-space:nowrap;min-width:60px;display:none;"></span>
           </div>
         </div>
@@ -674,6 +726,25 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <label>Remarks <span style="color:var(--text3)">(Optional)</span></label>
           <input type="text" id="palletRemarks" placeholder="Any notes...">
         </div>
+      </div>
+
+      <!-- Image Upload — shown for Group 2 materials (optional) -->
+      <div class="img-upload-section img-has-photo" id="imgSection" style="display:none;">
+        <div class="img-upload-label">
+          📷 Material Photo
+          <span class="img-badge-opt">OPTIONAL</span>
+        </div>
+        <button class="img-capture-btn" onclick="capturePhoto()" type="button">
+          📷 &nbsp; Take Photo of Material
+        </button>
+        <input type="file" id="imgFileInput" accept="image/*" capture="environment"
+          style="display:none;" onchange="onPhotoSelected(this)">
+        <div class="img-preview-wrap" id="imgPreviewWrap">
+          <img id="imgPreview" class="img-preview" src="" alt="Material photo">
+          <button class="img-retake-btn" onclick="retakePhoto()" type="button">🔄 Retake</button>
+        </div>
+        <div class="img-size-note" id="imgSizeNote"></div>
+        <div class="img-tick" id="imgTick" style="display:none;">✓ Photo captured</div>
       </div>
 
       <!-- Alerts -->
@@ -886,7 +957,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <div class="card">
       <div class="card-title">01 — Scan Pallet to Consume</div>
       <div class="field" style="margin-bottom:10px;">
-        <label>Pallet Number *</label>
+        <label id="palletNumLabel">Pallet Number *</label>
         <div class="barcode-wrap">
           <!-- Display field — shows scanned value, blocks manual typing -->
           <input type="text" id="outPalletDisplay"
@@ -1058,7 +1129,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
    PASTE YOUR GOOGLE APPS SCRIPT URL BELOW
    ════════════════════════════════════════════════════ */
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk2mHVkpNItlJSyZLfLwlrJ0He842wRk0im-0kivmyCN_hUmdpiz4Bs2ggEOxz0Do43A/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze8wrrqQd5z0Dch1gAKU5DrqBx890cbBLEYgxdfxs-uMWj5XqZZCuUkVNx7mZOtmKGNg/exec'; // ← PASTE YOUR APPS SCRIPT URL HERE
 
 /* ════ APP STATE ════ */
 const ADMIN_PASSWORD = 'admin123'; // Change this!
@@ -1076,6 +1147,7 @@ let cameraStream = null;
 let outScannerBuffer = '';
 let outScannerTimer  = null;
 let outSessionScans  = 0;
+let outScannerActive = false; // true when scan out screen is showing
 
 /* ════ SCAN OUT SCANNER FUNCTIONS ════ */
 
@@ -1085,12 +1157,57 @@ function focusOutScanner() {
   const hint    = document.getElementById('outScanHint');
   if (!hidden) return;
   hidden.focus();
+  outScannerActive = true;
   if (display) {
     display.style.borderColor = '#C0392B';
     display.style.boxShadow   = '0 0 0 3px rgba(192,57,43,0.15)';
   }
   if (hint) hint.textContent = '✅ Ready — scan pallet barcode now...';
 }
+
+// ── GLOBAL KEYDOWN LISTENER FOR SCAN OUT ────────────────
+// Same approach as Scan In — catches USB scanner even if focus lost
+document.addEventListener('keydown', function(event) {
+  if (!outScannerActive) return;
+  const scanoutScreen = document.getElementById('screenScanout');
+  if (!scanoutScreen || !scanoutScreen.classList.contains('active')) return;
+
+  // Don't intercept if Scan Out camera is open
+  const camScanner = document.getElementById('outCameraScanner');
+  if (camScanner && camScanner.classList.contains('open')) return;
+
+  // Don't intercept if user is typing in confirm button or other UI
+  const activeId  = document.activeElement ? document.activeElement.id : '';
+  const activeTag = document.activeElement ? document.activeElement.tagName : '';
+  if (activeId === 'outPalletInput') return; // already handled by handleOutScannerKeydown
+  if (activeTag === 'BUTTON' && event.key !== 'Enter') return;
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    document.getElementById('outPalletInput').focus();
+    handleOutScannerKeydown(event);
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    resetScanOut();
+    return;
+  }
+
+  // Printable character — route to out scanner buffer
+  if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    const hidden = document.getElementById('outPalletInput');
+    if (hidden) hidden.focus();
+    outScannerBuffer += event.key;
+    clearTimeout(outScannerTimer);
+    outScannerTimer = setTimeout(() => { outScannerBuffer = ''; }, 3000);
+    // Show scanning in progress
+    const display = document.getElementById('outPalletDisplay');
+    if (display && !display.value) {
+      display.placeholder = '⌛ Scanning: ' + outScannerBuffer.length + ' chars...';
+    }
+  }
+}, true); // useCapture = true
 
 function onOutScannerInput() {
   const hidden = document.getElementById('outPalletInput');
@@ -1223,11 +1340,14 @@ async function fetchPalletForScanOut(palletNumber) {
   const outBtn = document.getElementById('outSubmitBtn');
   if (outBtn) outBtn.disabled = true;
 
+  // Show loading state
+  document.getElementById('outScanHint').textContent = '⌛ Searching for pallet...';
+
   // Search in allRecords first (already loaded)
   let rec = allRecords.find(r => r.palletNumber === palletNumber);
 
   if (!rec) {
-    // Try fetching fresh from API
+    // Try fetching fresh from API — in case new scans happened
     const res = await callAPI('getRecords');
     if (res.success) {
       allRecords = res.data || [];
@@ -1236,8 +1356,18 @@ async function fetchPalletForScanOut(palletNumber) {
   }
 
   if (!rec) {
-    showOutAlert('outError', `Pallet "${palletNumber}" not found in Scan In records. Please scan a valid pallet.`);
+    // Clear display field to force rescan
+    document.getElementById('outPalletDisplay').value = '';
+    document.getElementById('outPalletDisplay').style.color = '#C0392B';
+    document.getElementById('outPalletDisplay').style.borderColor = '#C0392B';
     document.getElementById('outPalletDetails').style.display = 'none';
+    document.getElementById('outScanHint').textContent = '❌ Not found — scan a different pallet';
+    showOutAlert('outError',
+      `⛔ Pallet number "${palletNumber}" does not exist in Scan In list.\n` +
+      `Please verify the pallet was scanned in first before scanning out.`
+    );
+    // Refocus scanner for next scan attempt
+    setTimeout(() => focusOutScanner(), 500);
     return;
   }
 
@@ -1359,8 +1489,13 @@ function showOutAlert(id, msg) {
   hideOutAlerts();
   const el    = document.getElementById(id);
   const msgEl = document.getElementById(id + 'Msg');
-  if (msgEl) msgEl.textContent = msg;
-  if (el) { el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 7000); }
+  if (msgEl) msgEl.innerHTML = msg.replace(/\n/g, '<br>');
+  if (el) {
+    el.classList.add('show');
+    // Errors stay 10 seconds, others 6 seconds
+    const duration = id === 'outError' ? 10000 : 6000;
+    setTimeout(() => el.classList.remove('show'), duration);
+  }
 }
 function hideOutAlerts() {
   ['outError','outSuccess','outWarn'].forEach(id => {
@@ -1377,6 +1512,7 @@ window.onload = () => {
     loadDashboard();
   }
   // Init scanner hidden input on load
+  scannerActive = true;
   setTimeout(() => focusScannerInput(), 300);
 };
 
@@ -1411,11 +1547,18 @@ function showScreen(name) {
 
   if (name === 'scan') {
     loadPOs();
+    scannerActive    = true;
+    outScannerActive = false;
     setTimeout(() => focusScannerInput(), 200);
+  } else {
+    scannerActive = false;
   }
   if (name === 'scanout') {
+    outScannerActive = true;
     resetScanOut();
     setTimeout(() => focusOutScanner(), 300);
+  } else {
+    outScannerActive = false;
   }
   if (name === 'po') loadPOs();
   if (name === 'records') loadRecords();
@@ -1733,9 +1876,9 @@ const MATERIAL_UNITS = {
   'Busbar Spool(4*4)mm':    'kg',
   'Busbar Spool(4*6)mm':    'kg',
   'RFID':                   'nos',
-  'Cell Fixation Tap':      'nos',
-  'G2G Tap':                'nos',
-  'Tefflon Roll':           'nos',
+  'Cell Fixation Tape':     'nos',
+  'G2G Tape':               'nos',
+  'Teflon Roll':            'nos',
   'Aluminium Frame':        'pallet qty',
   'RTV Drum':               'kg',
   'Part A':                 'kg',
@@ -1747,12 +1890,39 @@ const MATERIAL_UNITS = {
 
 /* Called when material type dropdown changes */
 /* Materials with no pallet barcode — skip scan box, go straight to qty */
-const NO_BARCODE_MATERIALS = new Set([
+/* ════════════════════════════════════════════════
+   MATERIAL GROUPS — defines behaviour per material
+   ════════════════════════════════════════════════
+
+   GROUP 1 — Skip pallet barcode, qty only:
+     RFID, Cell Fixation Tape, G2G Tape, Teflon Roll
+
+   GROUP 2 — Pallet Number optional + Image optional:
+     Aluminium Frame, RTV Drum, Part A, Part B,
+     Corner, JB Cap, JB
+
+   GROUP 3 (all others) — Pallet Number mandatory,
+     no image upload
+   ════════════════════════════════════════════════ */
+
+const MAT_GROUP_1_SKIP_BARCODE = new Set([
   'RFID',
-  'Cell Fixation Tap',
-  'G2G Tap',
-  'Tefflon Roll'
+  'Cell Fixation Tape',
+  'G2G Tape',
+  'Teflon Roll'
 ]);
+
+const MAT_GROUP_2_OPTIONAL = new Set([
+  'Aluminium Frame',
+  'RTV Drum',
+  'Part A',
+  'Part B',
+  'Corner',
+  'JB Cap',
+  'JB'
+]);
+
+let capturedImageBase64 = '';
 
 function onMaterialSelected() {
   const mat      = document.getElementById('scanMaterialType').value;
@@ -1761,42 +1931,140 @@ function onMaterialSelected() {
   const label    = document.getElementById('qtyUnitLabel');
   const qtyInput = document.getElementById('palletQty');
 
+  // ── Unit badge ──
   if (unit) {
     if (badge) { badge.textContent = unit; badge.style.display = 'inline-block'; }
     if (label) { label.textContent = unit; label.style.display = 'block'; }
     const floatUnits = ['kg', 'sq.m', 'pallet qty'];
-    qtyInput.step = floatUnits.includes(unit) ? '0.01' : '1';
+    qtyInput.step        = floatUnits.includes(unit) ? '0.01' : '1';
     qtyInput.placeholder = floatUnits.includes(unit) ? 'e.g. 25.5' : 'e.g. 30';
   } else {
     if (badge) { badge.textContent = ''; badge.style.display = 'none'; }
     if (label) { label.textContent = ''; label.style.display = 'none'; }
-    qtyInput.step = 'any';
+    qtyInput.step        = 'any';
     qtyInput.placeholder = 'e.g. 30';
   }
 
-  // Show/hide barcode scan section based on material type
-  const barcodeCard = document.getElementById('barcodeScanCard');
-  if (barcodeCard) {
-    if (NO_BARCODE_MATERIALS.has(mat)) {
-      // Hide barcode card — not needed for this material
-      barcodeCard.style.display = 'none';
-      // Auto-generate a reference number so submitScan has a value
-      clearPalletScan();
-      const autoRef = 'NOBC-' + Date.now().toString().slice(-8);
-      document.getElementById('palletInput').value = autoRef;
-      const disp = document.getElementById('palletDisplay');
-      if (disp) { disp.value = '(No barcode — ' + mat + ')'; disp.style.color = '#888'; }
-      scannerBuffer = autoRef;
-      // Jump focus directly to qty
-      setTimeout(() => focusQty(), 100);
-    } else {
-      barcodeCard.style.display = 'block';
-      clearPalletScan();
-    }
+  const barcodeCard  = document.getElementById('barcodeScanCard');
+  const imgSection   = document.getElementById('imgSection');
+  const palletLabel  = document.getElementById('palletNumLabel');
+
+  // ── Reset image ──
+  resetImageSection();
+
+  if (!mat) {
+    // Nothing selected — show barcode card, hide image
+    if (barcodeCard)  barcodeCard.style.display  = 'block';
+    if (imgSection)   imgSection.style.display    = 'none';
+    if (palletLabel)  palletLabel.textContent     = 'Pallet Number *';
+    clearPalletScan();
+    return;
   }
 
-  // Show/hide image section
-  if (typeof showHideImageSection === 'function') showHideImageSection(mat);
+  if (MAT_GROUP_1_SKIP_BARCODE.has(mat)) {
+    // ── GROUP 1 — Hide barcode, go straight to qty ──
+    if (barcodeCard) barcodeCard.style.display = 'none';
+    if (imgSection)  imgSection.style.display  = 'none';
+    // Update qty card title to show step 02
+    const qtyTitle = document.getElementById('qtySubmitCard');
+    if (qtyTitle) qtyTitle.querySelector('.card-title').textContent = '02 — Enter Quantity';
+    // Auto-ref so submitScan has a non-empty palletInput
+    clearPalletScan();
+    const autoRef = 'NOBC-' + mat.replace(/[^A-Z0-9]/gi,'').substring(0,4).toUpperCase()
+                    + '-' + Date.now().toString().slice(-6);
+    document.getElementById('palletInput').value = autoRef;
+    const disp = document.getElementById('palletDisplay');
+    if (disp) { disp.value = '— No barcode (' + mat + ')'; disp.style.color = '#888'; }
+    scannerBuffer = autoRef;
+    setTimeout(() => focusQty(), 150);
+
+  } else if (MAT_GROUP_2_OPTIONAL.has(mat)) {
+    // ── GROUP 2 — Pallet optional + Image optional ──
+    if (barcodeCard) barcodeCard.style.display = 'block';
+    if (imgSection)  imgSection.style.display  = 'block';
+    if (palletLabel) palletLabel.textContent   = 'Pallet Number (Optional)';
+    const qtyCard = document.getElementById('qtySubmitCard');
+    if (qtyCard) qtyCard.querySelector('.card-title').textContent = '03 — Quantity & Submit';
+    const disp = document.getElementById('palletDisplay');
+    if (disp) {
+      disp.placeholder = 'Optional — scan if available';
+      disp.style.borderColor = 'var(--border2)';
+    }
+    clearPalletScan();
+
+  } else {
+    // ── GROUP 3 — Pallet mandatory, no image ──
+    if (barcodeCard) barcodeCard.style.display = 'block';
+    if (imgSection)  imgSection.style.display  = 'none';
+    if (palletLabel) palletLabel.textContent   = 'Pallet Number *';
+    const qtyCard = document.getElementById('qtySubmitCard');
+    if (qtyCard) qtyCard.querySelector('.card-title').textContent = '03 — Quantity & Submit';
+    const disp = document.getElementById('palletDisplay');
+    if (disp) {
+      disp.placeholder = '🔒 Scan barcode — typing not allowed';
+      disp.style.borderColor = '';
+    }
+    clearPalletScan();
+  }
+}
+
+/* ════ IMAGE CAPTURE FUNCTIONS ════ */
+function capturePhoto() {
+  document.getElementById('imgFileInput').click();
+}
+
+function onPhotoSelected(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    compressImage(e.target.result, 1200, 0.75, function(compressed) { // Better quality for Drive
+      capturedImageBase64 = compressed;
+      document.getElementById('imgPreview').src = compressed;
+      document.getElementById('imgPreviewWrap').style.display = 'block';
+      document.getElementById('imgTick').style.display = 'block';
+      const section = document.getElementById('imgSection');
+      if (section) section.classList.add('img-has-photo');
+      const sizeKB = Math.round(compressed.length * 0.75 / 1024);
+      const note   = document.getElementById('imgSizeNote');
+      if (note) note.textContent = 'Photo compressed: ~' + sizeKB + ' KB';
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function retakePhoto() {
+  resetImageSection();
+  setTimeout(() => capturePhoto(), 100);
+}
+
+function resetImageSection() {
+  capturedImageBase64 = '';
+  const wrap  = document.getElementById('imgPreviewWrap');
+  const tick  = document.getElementById('imgTick');
+  const prev  = document.getElementById('imgPreview');
+  const note  = document.getElementById('imgSizeNote');
+  const input = document.getElementById('imgFileInput');
+  const sec   = document.getElementById('imgSection');
+  if (wrap)  wrap.style.display  = 'none';
+  if (tick)  tick.style.display  = 'none';
+  if (prev)  prev.src            = '';
+  if (note)  note.textContent    = '';
+  if (input) input.value         = '';
+  if (sec)   sec.classList.remove('img-has-photo');
+}
+
+function compressImage(dataUrl, maxWidth, quality, callback) {
+  const img = new Image();
+  img.onload = function() {
+    let w = img.width, h = img.height;
+    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    callback(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.src = dataUrl;
 }
 
 /* Focus qty field after barcode scan */
@@ -1828,16 +2096,19 @@ document.addEventListener('DOMContentLoaded', function() {
    - Scanner types into hidden field at high speed
    - Enter key triggers: copy to display field → focus qty
    - Manual keyboard cannot type into visible field (it's readonly)
+   - Global keydown listener catches USB scanner even if focus lost
    ════════════════════════════════════════════════════════════════ */
 
-let scannerBuffer = '';
-let scannerTimer  = null;
+let scannerBuffer  = '';
+let scannerTimer   = null;
+let scannerActive  = false; // true when scan screen is showing
 
 // Called when user clicks the display field — focus hidden input
 function focusScannerInput() {
   const hidden = document.getElementById('palletInput');
   if (hidden) {
     hidden.focus();
+    scannerActive = true;
     document.getElementById('scanHintText').textContent = '✅ Ready — scan barcode now...';
     document.getElementById('palletDisplay').style.borderColor = 'var(--accent)';
     document.getElementById('palletDisplay').style.boxShadow = '0 0 0 3px rgba(26,122,46,0.15)';
@@ -1850,9 +2121,62 @@ function initScannerInput() {
     const hidden = document.getElementById('palletInput');
     if (hidden && document.getElementById('screenScan').classList.contains('active')) {
       hidden.focus();
+      scannerActive = true;
     }
   }, 200);
 }
+
+// ── GLOBAL KEYDOWN LISTENER ──────────────────────────────
+// Catches USB scanner input even if hidden field lost focus
+// This is the KEY fix for laptop USB scanners
+document.addEventListener('keydown', function(event) {
+  // Only intercept when scan screen is active
+  if (!scannerActive) return;
+  const scanScreen = document.getElementById('screenScan');
+  if (!scanScreen || !scanScreen.classList.contains('active')) return;
+
+  // Don't intercept if user is typing in another input
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  const activeId = document.activeElement ? document.activeElement.id : '';
+
+  // Allow normal typing in qty, remarks, name, PO select etc.
+  const nonScannerFields = ['palletQty','palletRemarks','inchargeName','scanPoSelect','scanMaterialType','shiftA','shiftB','shiftC'];
+  if (nonScannerFields.includes(activeId)) return;
+  if (tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (activeId === 'palletInput') return; // already handled by handleScannerKeydown
+
+  // Route keystrokes to hidden scanner input
+  const hidden = document.getElementById('palletInput');
+  if (!hidden) return;
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    hidden.focus();
+    // Trigger handleScannerKeydown manually
+    handleScannerKeydown(event);
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    clearPalletScan();
+    return;
+  }
+
+  // Printable character — add to buffer and focus hidden input
+  if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    hidden.focus();
+    scannerBuffer += event.key;
+    clearTimeout(scannerTimer);
+    scannerTimer = setTimeout(() => {
+      scannerBuffer = '';
+    }, 3000);
+    // Update display to show scanning in progress
+    const display = document.getElementById('palletDisplay');
+    if (display && !display.value) {
+      display.placeholder = '⌛ Scanning: ' + scannerBuffer.length + ' chars...';
+    }
+  }
+}, true); // useCapture = true — catches events before anything else
 
 // Handles all keystrokes from scanner/keyboard into hidden field
 function handleScannerKeydown(event) {
@@ -1864,8 +2188,10 @@ function handleScannerKeydown(event) {
       // Set value in hidden input (used by submitScan)
       document.getElementById('palletInput').value = val;
       // Show in display field
-      document.getElementById('palletDisplay').value = val;
-      document.getElementById('palletDisplay').style.color = '#1A7A2E';
+      const display = document.getElementById('palletDisplay');
+      display.value = val;
+      display.style.color = '#1A7A2E';
+      display.placeholder = '🔒 Scan barcode — typing not allowed';
       document.getElementById('scanHintText').textContent = '✓ Barcode scanned — enter quantity below';
       // Reset buffer
       scannerBuffer = '';
@@ -1889,7 +2215,8 @@ function handleScannerKeydown(event) {
     clearTimeout(scannerTimer);
     scannerTimer = setTimeout(() => {
       scannerBuffer = '';
-      clearPalletScan(); // clears both hidden + display fields
+      clearPalletScan();
+    resetImageSection();
     }, 3000);
   }
 }
@@ -1972,7 +2299,26 @@ async function submitScan() {
   if (!incharge)     { showAlert('scanError', 'Please enter In-charge Name.'); return; }
   if (!poNumber)     { showAlert('scanError', 'Please select a Purchase Order.'); return; }
   if (!materialType) { showAlert('scanError', 'Please select Material Type.'); return; }
-  if (!palletNumber) { showAlert('scanError', 'Pallet number cannot be empty.'); return; }
+
+  // Pallet number validation depends on material group
+  let finalPalletNumber = palletNumber;
+
+  if (MAT_GROUP_1_SKIP_BARCODE.has(materialType)) {
+    // Group 1 — use auto-generated ref (already set by onMaterialSelected)
+    finalPalletNumber = palletNumber || ('NOBC-' + materialType.replace(/[^A-Z0-9]/gi,'').substring(0,4).toUpperCase() + '-' + Date.now().toString().slice(-6));
+
+  } else if (MAT_GROUP_2_OPTIONAL.has(materialType)) {
+    // Group 2 — pallet optional, generate ref if not scanned
+    finalPalletNumber = palletNumber || ('OPT-' + materialType.replace(/[^A-Z0-9]/gi,'').substring(0,4).toUpperCase() + '-' + Date.now().toString().slice(-6));
+
+  } else {
+    // Group 3 — pallet mandatory
+    if (!palletNumber) {
+      showAlert('scanError', 'Pallet number is required for this material. Please scan barcode.');
+      return;
+    }
+  }
+
   if (!palletQty || isNaN(parseFloat(palletQty))) {
     showAlert('scanError', 'Pallet Quantity is required. Enter a number (e.g. 10 or 2.5).');
     return;
@@ -1985,7 +2331,7 @@ async function submitScan() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Checking...';
 
-  const res = await callAPI('scanPallet', { palletNumber, poNumber, lineCode, materialType, palletQty, remarks, incharge, shift });
+  const res = await callAPI('scanPallet', { palletNumber: finalPalletNumber, poNumber, lineCode, materialType, palletQty, remarks, incharge, shift, imageData: capturedImageBase64 });
 
   btn.disabled = false;
   btn.textContent = 'Submit Scan';
@@ -2003,11 +2349,11 @@ async function submitScan() {
 
     // Auto-close removed
     {
-      showAlert('scanSuccess', `✓ Pallet "${palletNumber}" scanned successfully!${SCRIPT_URL?'':' (Demo mode)'}`);
+      showAlert('scanSuccess', `✓ Pallet "${finalPalletNumber}" scanned!${capturedImageBase64 ? ' 📷 Photo uploading to Drive...' : ''}${SCRIPT_URL?'':' (Demo mode)'}`);
     }
 
     // Add to recent list
-    addRecentScan(palletNumber, lineCode, materialType);
+    addRecentScan(finalPalletNumber, lineCode, materialType);
 
     // Clear only pallet fields — keep Shift/Name/PO/Material sticky for next scan
     document.getElementById('palletInput').value = '';
@@ -2211,9 +2557,10 @@ function renderRecords(records) {
     const statusBadge = isFinished
       ? `<span class="badge" style="background:rgba(100,116,139,0.15);border:1px solid rgba(100,116,139,0.3);color:#888;">■ Finished</span>`
       : `<span class="badge badge-open">● In Stock</span>`;
-    const imgCell = r.imageData
-      ? `<td style="text-align:center;"><img src="${r.imageData}" style="height:40px;width:50px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="viewImage('${r.palletNumber}','${r.imageData}')" title="Click to view"></td>`
-      : `<td style="text-align:center;color:var(--text3);font-size:11px;">${r.hasImage||'—'}</td>`;
+    const imgUrl    = r.imageLink || r.imageData || '';
+    const imgCell   = imgUrl
+      ? `<td style="text-align:center;"><a href="${imgUrl}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:rgba(26,122,46,0.12);border:1px solid rgba(26,122,46,0.3);border-radius:6px;padding:4px 8px;font-size:11px;color:#1A7A2E;text-decoration:none;font-weight:500;">📷 View</a></td>`
+      : `<td style="text-align:center;color:var(--text3);font-size:11px;">—</td>`;
     html += `<tr>
       <td>${statusBadge}</td>
       <td style="font-family:var(--mono);font-weight:600;color:var(--text)">${r.palletNumber}</td>
@@ -2245,16 +2592,33 @@ function clearFilters() {
   filterRecords();
 }
 
+/* ════ IMAGE LIGHTBOX ════ */
+function viewImage(palletNum, imageData) {
+  let modal = document.getElementById('imgLightbox');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'imgLightbox';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;';
+    modal.innerHTML = '<div style="color:#fff;font-family:var(--mono);font-size:12px;margin-bottom:10px;opacity:0.7;" id="lbTitle"></div><img id="lbImg" style="max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;"><div style="color:#fff;font-size:12px;margin-top:10px;opacity:0.5;">Tap anywhere to close</div>';
+    modal.onclick = () => modal.style.display = 'none';
+    document.body.appendChild(modal);
+  }
+  document.getElementById('lbTitle').textContent = 'Pallet: ' + palletNum;
+  document.getElementById('lbImg').src = imageData;
+  modal.style.display = 'flex';
+}
+
 /* ════ EXPORT CSV ════ */
 function exportCSV() {
   const line = document.getElementById('filterLine').value;
   const mat = document.getElementById('filterMaterial').value;
   let data = allRecords.filter(r => (!line || r.lineCode === line) && (!mat || r.materialType === mat));
 
-  let csv = 'Status,Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Scan In Time,Scan Out Time\n';
+  let csv = 'Status,Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Photo,Scan In Time,Scan Out Time\n';
   data.forEach(r => {
     const status = (r.scanOutTime && r.scanOutTime.length > 0) ? 'Finished' : 'In Stock';
-    csv += `"${status}","${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${r.scannedOn}","${r.scanOutTime||''}"\n`;
+    const photoLink = r.imageLink || r.imageData || '';
+    csv += `"${status}","${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${photoLink}","${r.scannedOn}","${r.scanOutTime||''}"\n`;
   });
   const blob = new Blob([csv], { type:'text/csv' });
   const a = document.createElement('a');
