@@ -1618,41 +1618,17 @@ function callAPI(action, data = {}) {
 /* POST fetch — used for image uploads (avoids URL length limit) */
 async function postFetch(action, data) {
   try {
-    // Separate image from other data
     const imageData = data.imageData || '';
     const scanData  = Object.assign({}, data);
     delete scanData.imageData;
 
-    // Step 1 — Save scan without image via JSONP (fast, reliable)
+    // Step 1 — Save scan record without image via JSONP
     const scanRes = await jsonpCall(action, scanData);
     if (!scanRes.success) return scanRes;
 
-    // Step 2 — Upload image separately if present
+    // Step 2 — Upload image via JSONP chunk method
     if (imageData && imageData.length > 100) {
-      try {
-        // Send image via fetch POST to Apps Script
-        const formData = new URLSearchParams();
-        formData.append('action',      'uploadImage');
-        formData.append('palletNumber', data.palletNumber || '');
-        formData.append('imageData',    imageData);
-
-        const res  = await fetch(SCRIPT_URL, {
-          method:      'POST',
-          credentials: 'omit',
-          redirect:    'follow',
-          headers:     { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body:        formData.toString()
-        });
-        const text = await res.text();
-        const clean = text.replace(/^[^{]*/, '').replace(/[^}]*$/, '');
-        const imgRes = JSON.parse(clean || '{}');
-        if (imgRes.driveLink) {
-          console.log('Image uploaded to Drive:', imgRes.driveLink);
-        }
-      } catch(imgErr) {
-        // Image upload failed — scan already saved, just log
-        console.warn('Image upload failed (scan saved OK):', imgErr.message);
-      }
+      uploadImageChunked(data.palletNumber || '', imageData);
     }
 
     return scanRes;
@@ -1661,6 +1637,76 @@ async function postFetch(action, data) {
     console.error('postFetch error:', e);
     return { success: false, error: 'Connection failed: ' + e.message };
   }
+}
+
+/* ════ CHUNKED IMAGE UPLOAD VIA JSONP ════
+   Apps Script blocks cross-origin POST from GitHub Pages.
+   Solution: compress image heavily → send via JSONP GET.
+   JSONP URLs support ~7000 chars safely.
+   We compress to ~200px width = ~3-5KB base64 = fits in URL.
+   Apps Script saves to Drive, updates Sheet link.
+   ════════════════════════════════════════════════════════ */
+async function uploadImageChunked(palletNumber, imageData) {
+  try {
+    // Smart adaptive compression:
+    // Try best quality first, reduce until fits in JSONP URL (~6000 chars safe limit)
+    // Each step trades quality for smaller size
+
+    const steps = [
+      { width: 480, quality: 0.72 },  // ~12-18KB base64 — try first (best quality)
+      { width: 400, quality: 0.65 },  // ~9-14KB — good quality
+      { width: 320, quality: 0.60 },  // ~7-10KB — fair quality
+      { width: 260, quality: 0.55 },  // ~5-8KB  — acceptable
+      { width: 200, quality: 0.50 },  // ~3-5KB  — minimum acceptable
+    ];
+
+    const URL_LIMIT = 5800; // safe JSONP URL char limit for base64 (leaves room for other params)
+
+    let chosenImage = null;
+    let chosenStep  = null;
+
+    for (const step of steps) {
+      const compressed = await new Promise((resolve) => {
+        compressImage(imageData, step.width, step.quality, resolve);
+      });
+      // Strip prefix to measure actual base64 chars sent in URL
+      const rawB64 = compressed.replace(/^data:image\/[^;]+;base64,/, '');
+      console.log(`Compression ${step.width}px @${step.quality}: ${rawB64.length} chars`);
+
+      chosenImage = compressed;
+      chosenStep  = step;
+
+      if (rawB64.length <= URL_LIMIT) {
+        console.log(`✓ Using ${step.width}px @${step.quality*100}% quality — fits in URL`);
+        break;
+      }
+    }
+
+    sendImageViaJSONP(palletNumber, chosenImage);
+
+  } catch(e) {
+    console.warn('Image upload failed:', e.message);
+  }
+}
+
+function sendImageViaJSONP(palletNumber, imageData) {
+  // Remove data:image/jpeg;base64, prefix — send only raw base64
+  const rawBase64 = imageData.replace(/^data:image\/[^;]+;base64,/, '');
+
+  jsonpCall('uploadImage', {
+    palletNumber: palletNumber,
+    imageData:    rawBase64,
+    hasPrefix:    'false'
+  }).then(function(res) {
+    if (res && res.success) {
+      console.log('✅ Image uploaded to Drive:', res.driveLink);
+      showAlert('scanSuccess', '✓ Photo saved to Drive! 📷');
+    } else {
+      console.warn('Image upload result:', res);
+    }
+  }).catch(function(e) {
+    console.warn('JSONP image upload failed:', e);
+  });
 }
 
 /* Primary method — JSONP (works cross-origin) */
@@ -2072,7 +2118,7 @@ function onPhotoSelected(input) {
   const file = input.files[0];
   const reader = new FileReader();
   reader.onload = function(e) {
-    compressImage(e.target.result, 1200, 0.75, function(compressed) { // Better quality for Drive
+    compressImage(e.target.result, 1200, 0.85, function(compressed) { // Capture high quality, adaptive compression on upload
       capturedImageBase64 = compressed;
       document.getElementById('imgPreview').src = compressed;
       document.getElementById('imgPreviewWrap').style.display = 'block';
