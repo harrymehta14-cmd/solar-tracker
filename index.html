@@ -1622,13 +1622,14 @@ async function postFetch(action, data) {
     const scanData  = Object.assign({}, data);
     delete scanData.imageData;
 
-    // Step 1 — Save scan record without image via JSONP
+    // Step 1 — Save scan record via JSONP (no image)
     const scanRes = await jsonpCall(action, scanData);
     if (!scanRes.success) return scanRes;
 
-    // Step 2 — Upload image via JSONP chunk method
+    // Step 2 — Upload image separately via adaptive JSONP
     if (imageData && imageData.length > 100) {
-      uploadImageChunked(data.palletNumber || '', imageData);
+      const palletNumber = data.palletNumber || '';
+      uploadImageAdaptive(palletNumber, imageData);
     }
 
     return scanRes;
@@ -1639,74 +1640,66 @@ async function postFetch(action, data) {
   }
 }
 
-/* ════ CHUNKED IMAGE UPLOAD VIA JSONP ════
-   Apps Script blocks cross-origin POST from GitHub Pages.
-   Solution: compress image heavily → send via JSONP GET.
-   JSONP URLs support ~7000 chars safely.
-   We compress to ~200px width = ~3-5KB base64 = fits in URL.
-   Apps Script saves to Drive, updates Sheet link.
-   ════════════════════════════════════════════════════════ */
-async function uploadImageChunked(palletNumber, imageData) {
+/* ════ ADAPTIVE IMAGE UPLOAD VIA JSONP ════
+   Mobile cameras produce large images.
+   We try progressively smaller compressions
+   until the base64 fits safely in a JSONP URL.
+   JSONP URL safe limit = ~5800 chars for base64.
+   ═════════════════════════════════════════════ */
+async function uploadImageAdaptive(palletNumber, imageData) {
   try {
-    // Smart adaptive compression:
-    // Try best quality first, reduce until fits in JSONP URL (~6000 chars safe limit)
-    // Each step trades quality for smaller size
-
+    // Progressive compression steps — best quality to minimum
     const steps = [
-      { width: 480, quality: 0.72 },  // ~12-18KB base64 — try first (best quality)
-      { width: 400, quality: 0.65 },  // ~9-14KB — good quality
-      { width: 320, quality: 0.60 },  // ~7-10KB — fair quality
-      { width: 260, quality: 0.55 },  // ~5-8KB  — acceptable
-      { width: 200, quality: 0.50 },  // ~3-5KB  — minimum acceptable
+      { width: 480, quality: 0.72 },  // ~4-6KB  — best quality
+      { width: 380, quality: 0.65 },  // ~3-5KB  — good
+      { width: 300, quality: 0.60 },  // ~2-4KB  — fair
+      { width: 240, quality: 0.55 },  // ~2-3KB  — acceptable
+      { width: 180, quality: 0.50 },  // ~1-2KB  — minimum
     ];
 
-    const URL_LIMIT = 5800; // safe JSONP URL char limit for base64 (leaves room for other params)
+    const URL_SAFE_LIMIT = 5800; // safe chars for base64 in JSONP URL
 
-    let chosenImage = null;
-    let chosenStep  = null;
+    let finalImage = null;
+    let usedStep   = null;
 
     for (const step of steps) {
       const compressed = await new Promise((resolve) => {
         compressImage(imageData, step.width, step.quality, resolve);
       });
-      // Strip prefix to measure actual base64 chars sent in URL
+
+      // Strip prefix — only raw base64 goes in URL
       const rawB64 = compressed.replace(/^data:image\/[^;]+;base64,/, '');
-      console.log(`Compression ${step.width}px @${step.quality}: ${rawB64.length} chars`);
+      console.log(`Try ${step.width}px @${Math.round(step.quality*100)}%: ${rawB64.length} chars`);
 
-      chosenImage = compressed;
-      chosenStep  = step;
+      finalImage = compressed;
+      usedStep   = step;
 
-      if (rawB64.length <= URL_LIMIT) {
-        console.log(`✓ Using ${step.width}px @${step.quality*100}% quality — fits in URL`);
+      if (rawB64.length <= URL_SAFE_LIMIT) {
+        console.log(`✓ Fits! Using ${step.width}px @${Math.round(step.quality*100)}%`);
         break;
       }
+      console.log(`Too large (${rawB64.length} > ${URL_SAFE_LIMIT}), trying smaller...`);
     }
 
-    sendImageViaJSONP(palletNumber, chosenImage);
+    // Send via JSONP — Apps Script uploads to Drive
+    const rawB64 = finalImage.replace(/^data:image\/[^;]+;base64,/, '');
+    console.log(`Sending ${rawB64.length} chars to Apps Script...`);
 
-  } catch(e) {
-    console.warn('Image upload failed:', e.message);
-  }
-}
+    const res = await jsonpCall('uploadImage', {
+      palletNumber: palletNumber,
+      imageData:    rawB64
+    });
 
-function sendImageViaJSONP(palletNumber, imageData) {
-  // Remove data:image/jpeg;base64, prefix — send only raw base64
-  const rawBase64 = imageData.replace(/^data:image\/[^;]+;base64,/, '');
-
-  jsonpCall('uploadImage', {
-    palletNumber: palletNumber,
-    imageData:    rawBase64,
-    hasPrefix:    'false'
-  }).then(function(res) {
     if (res && res.success) {
-      console.log('✅ Image uploaded to Drive:', res.driveLink);
+      console.log('✅ Image saved to Drive:', res.driveLink);
       showAlert('scanSuccess', '✓ Photo saved to Drive! 📷');
     } else {
-      console.warn('Image upload result:', res);
+      console.warn('Image upload result:', JSON.stringify(res));
     }
-  }).catch(function(e) {
-    console.warn('JSONP image upload failed:', e);
-  });
+
+  } catch(e) {
+    console.warn('Image upload error (scan saved OK):', e.message);
+  }
 }
 
 /* Primary method — JSONP (works cross-origin) */
@@ -2118,7 +2111,7 @@ function onPhotoSelected(input) {
   const file = input.files[0];
   const reader = new FileReader();
   reader.onload = function(e) {
-    compressImage(e.target.result, 1200, 0.85, function(compressed) { // Capture high quality, adaptive compression on upload
+    compressImage(e.target.result, 1200, 0.85, function(compressed) { // High quality capture — adaptive compression on upload
       capturedImageBase64 = compressed;
       document.getElementById('imgPreview').src = compressed;
       document.getElementById('imgPreviewWrap').style.display = 'block';
