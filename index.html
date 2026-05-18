@@ -2169,14 +2169,14 @@ function focusQty() {
   }
 }
 
-/* After qty entered + Enter → re-focus scanner */
+/* After qty entered + Enter → submit */
 document.addEventListener('DOMContentLoaded', function() {
   const qtyEl = document.getElementById('palletQty');
   if (qtyEl) {
     qtyEl.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        submitScan();
+        if (!isSubmitting) submitScan();
       }
     });
   }
@@ -2377,7 +2377,16 @@ function onPalletInput() {
 }
 
 /* ════ SUBMIT SCAN ════ */
+let isSubmitting = false; // prevent double scan submission
+
 async function submitScan() {
+  // ── DOUBLE SUBMIT PREVENTION ──────────────────────────
+  if (isSubmitting) {
+    console.warn('Submission already in progress — ignoring duplicate trigger');
+    return;
+  }
+  isSubmitting = true;
+
   const poNumber     = document.getElementById('scanPoSelect').value;
   const palletNumber = document.getElementById('palletInput').value.trim().toUpperCase();
   const materialType = document.getElementById('scanMaterialType').value;
@@ -2388,33 +2397,28 @@ async function submitScan() {
 
   hideAlerts('scan');
 
-  if (!shift)        { showAlert('scanError', 'Please select a Shift (A, B or C).'); return; }
-  if (!incharge)     { showAlert('scanError', 'Please enter In-charge Name.'); return; }
-  if (!poNumber)     { showAlert('scanError', 'Please select a Purchase Order.'); return; }
-  if (!materialType) { showAlert('scanError', 'Please select Material Type.'); return; }
+  if (!shift)        { showAlert('scanError', 'Please select a Shift (A, B or C).'); isSubmitting = false; return; }
+  if (!incharge)     { showAlert('scanError', 'Please enter In-charge Name.'); isSubmitting = false; return; }
+  if (!poNumber)     { showAlert('scanError', 'Please select a Purchase Order.'); isSubmitting = false; return; }
+  if (!materialType) { showAlert('scanError', 'Please select Material Type.'); isSubmitting = false; return; }
 
   // Pallet number validation depends on material group
   let finalPalletNumber = palletNumber;
 
   if (MAT_GROUP_1_SKIP_BARCODE.has(materialType)) {
-    // Group 1 — use auto-generated ref (already set by onMaterialSelected)
     finalPalletNumber = palletNumber || ('NOBC-' + materialType.replace(/[^A-Z0-9]/gi,'').substring(0,4).toUpperCase() + '-' + Date.now().toString().slice(-6));
-
   } else if (MAT_GROUP_2_OPTIONAL.has(materialType)) {
-    // Group 2 — pallet optional, generate ref if not scanned
     finalPalletNumber = palletNumber || ('OPT-' + materialType.replace(/[^A-Z0-9]/gi,'').substring(0,4).toUpperCase() + '-' + Date.now().toString().slice(-6));
-
   } else {
-    // Group 3 — pallet mandatory
     if (!palletNumber) {
       showAlert('scanError', 'Pallet number is required for this material. Please scan barcode.');
-      return;
+      isSubmitting = false; return;
     }
   }
 
   if (!palletQty || isNaN(parseFloat(palletQty))) {
     showAlert('scanError', 'Pallet Quantity is required. Enter a number (e.g. 10 or 2.5).');
-    return;
+    isSubmitting = false; return;
   }
 
   const po = allPOs.find(p => p.poNumber === poNumber);
@@ -2422,10 +2426,12 @@ async function submitScan() {
 
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Checking...';
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
 
   const res = await callAPI('scanPallet', { palletNumber: finalPalletNumber, poNumber, lineCode, materialType, palletQty, remarks, incharge, shift, imageData: capturedImageBase64 });
 
+  // Release lock
+  isSubmitting = false;
   btn.disabled = false;
   btn.textContent = 'Submit Scan';
 
@@ -2449,14 +2455,15 @@ async function submitScan() {
     addRecentScan(finalPalletNumber, lineCode, materialType);
 
     // Clear only pallet fields — keep Shift/Name/PO/Material sticky for next scan
-    document.getElementById('palletInput').value = '';
+    clearPalletScan();
+    capturedImageBase64 = '';
+    resetImageSection();
     document.getElementById('palletQty').value = '';
     document.getElementById('palletRemarks').value = '';
-    document.getElementById('palletInput').focus();
 
   } else if (res.duplicate) {
-    showAlert('scanError', `⛔ DUPLICATE PALLET: "${palletNumber}" — ${res.error}`);
-    document.getElementById('palletInput').select();
+    showAlert('scanError', `⛔ DUPLICATE: "${finalPalletNumber}" already scanned — ${res.error}`);
+    clearPalletScan(); // clear pallet so engineer scans next one
   } else {
     showAlert('scanError', res.error || 'Scan failed. Please try again.');
   }
