@@ -1563,14 +1563,23 @@ function startOutZXingDecode() {
   outZxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, error) => {
     if (result) {
       const code = result.getText().trim().toUpperCase();
-      // Fill hidden + display fields
+
+      // ── MINIMUM LENGTH CHECK — same as USB scanner ──
+      if (code.length < MIN_BARCODE_LENGTH) {
+        statusEl.textContent = `⛔ Too short (${code.length} chars) — minimum ${MIN_BARCODE_LENGTH}. Try again...`;
+        setTimeout(() => {
+          statusEl.textContent = '🔍 Scanning... point at pallet barcode';
+        }, 2000);
+        return; // reject — keep camera open for retry
+      }
+
+      // Valid barcode — fill fields
       document.getElementById('outPalletInput').value   = code;
       document.getElementById('outPalletDisplay').value = code;
       document.getElementById('outPalletDisplay').style.color = '#C0392B';
       outScannerBuffer = code;
       stopOutCamera();
-      document.getElementById('outScanHint').textContent = '✓ Barcode scanned — fetching details...';
-      // Fetch pallet details
+      document.getElementById('outScanHint').textContent = `✓ Barcode scanned (${code.length} chars) — fetching details...`;
       fetchPalletForScanOut(code);
     }
     if (error && !(error instanceof ZXing.NotFoundException)) {
@@ -3003,7 +3012,7 @@ document.addEventListener('keydown', function(event) {
 }, true); // useCapture = true — catches events before anything else
 
 // Handles all keystrokes from scanner/keyboard into hidden field
-const MIN_BARCODE_LENGTH = 8; // ← change this number anytime
+const MIN_BARCODE_LENGTH = 10; // ← change this number anytime
 
 function handleScannerKeydown(event) {
   // Enter = end of barcode scan
@@ -3297,8 +3306,18 @@ function startZXingDecode() {
 
   zxingReader.decodeFromVideoDevice(deviceId, videoEl, (result, error) => {
     if (result) {
-      const code = result.getText();
-      // Fill both hidden input and display field from camera
+      const code = result.getText().trim().toUpperCase();
+
+      // ── MINIMUM LENGTH CHECK — same as USB scanner ──
+      if (code.length < MIN_BARCODE_LENGTH) {
+        statusEl.textContent = `⛔ Too short (${code.length} chars) — minimum ${MIN_BARCODE_LENGTH}. Try again...`;
+        setTimeout(() => {
+          statusEl.textContent = '🔍 Scanning... point at barcode';
+        }, 2000);
+        return; // reject — keep camera open for retry
+      }
+
+      // Valid barcode — fill fields
       document.getElementById('palletInput').value = code;
       const disp = document.getElementById('palletDisplay');
       if (disp) {
@@ -3307,7 +3326,7 @@ function startZXingDecode() {
       }
       scannerBuffer = code;
       stopCamera();
-      showAlert('scanSuccess', '📷 Barcode scanned: ' + code + ' — enter quantity and submit');
+      showAlert('scanSuccess', `📷 Barcode scanned (${code.length} chars) — enter quantity and submit`);
       setTimeout(() => focusQty(), 200);
     }
     if (error && !(error instanceof ZXing.NotFoundException)) {
