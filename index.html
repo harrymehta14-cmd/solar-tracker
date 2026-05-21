@@ -391,6 +391,35 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 @keyframes spin { to{transform:rotate(360deg)} }
 
 /* ── LOGIN OVERLAY ── */
+/* ── MAIN USER LOGIN OVERLAY ── */
+#mainLoginOverlay {
+  display:flex; position:fixed; inset:0; z-index:999;
+  background:linear-gradient(135deg,#0a3d1a,#1A7A2E,#0a3d1a);
+  align-items:center; justify-content:center; flex-direction:column;
+}
+.main-login-box {
+  background:var(--bg2); border-radius:20px; padding:36px 32px;
+  width:min(92vw,400px); box-shadow:0 24px 80px rgba(0,0,0,0.4);
+  border:1px solid rgba(26,122,46,0.3);
+}
+.main-login-logo {
+  display:flex; align-items:center; justify-content:center;
+  gap:12px; margin-bottom:24px;
+}
+.main-login-title {
+  font-family:var(--mono); font-size:18px; font-weight:700;
+  color:var(--text); text-align:center; margin-bottom:4px;
+}
+.main-login-sub {
+  font-size:12px; color:var(--text3); text-align:center;
+  margin-bottom:24px;
+}
+.main-login-error {
+  background:rgba(192,57,43,0.1); border:1px solid rgba(192,57,43,0.3);
+  border-radius:8px; padding:8px 12px; font-size:12px; color:#C0392B;
+  margin-bottom:12px; display:none;
+}
+
 #loginOverlay {
   display:none;
   position:fixed; inset:0; z-index:200;
@@ -519,6 +548,29 @@ tr:hover td { background:rgba(255,255,255,0.02); }
   margin:20px 0;
 }
 
+/* ── SUPERADMIN EDITABLE TABLE ── */
+.sa-table input[type=text] {
+  width:100%;border:1px solid var(--border2);border-radius:4px;
+  padding:3px 6px;font-size:11px;background:var(--bg3);color:var(--text);
+}
+.sa-table input[type=text]:focus {
+  outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,122,46,0.15);
+}
+.sa-table select {
+  border:1px solid var(--border2);border-radius:4px;padding:3px 4px;
+  font-size:11px;background:var(--bg3);color:var(--text);
+}
+.btn-sa-delete {
+  background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.3);
+  color:#C0392B;border-radius:6px;padding:3px 8px;font-size:11px;
+  cursor:pointer;font-weight:500;white-space:nowrap;
+}
+.btn-sa-save {
+  background:rgba(26,122,46,0.12);border:1px solid rgba(26,122,46,0.3);
+  color:var(--accent);border-radius:6px;padding:3px 8px;font-size:11px;
+  cursor:pointer;font-weight:500;display:none;white-space:nowrap;
+}
+
 /* ── SHIFT TABS ── */
 .shift-tabs { display:flex; gap:6px; margin-bottom:14px; }
 .shift-tab {
@@ -549,6 +601,38 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 <div class="scan-flash" id="scanFlash"></div>
 
 <!-- ══ LOGIN OVERLAY (Admin only) ══ -->
+<!-- ══ MAIN USER LOGIN — shows on app start ══ -->
+<div id="mainLoginOverlay">
+  <div class="main-login-box">
+    <!-- Logo -->
+    <div class="main-login-logo">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" 
+        id="mainLoginLogo" style="height:40px;width:auto;" alt="Logo">
+    </div>
+    <div class="main-login-title">SG PRODUCTION LINE</div>
+    <div class="main-login-sub">Material Receiving Tracker · Please login to continue</div>
+
+    <div class="field" style="margin-bottom:12px;">
+      <label>Username</label>
+      <input type="text" id="mlUsername" placeholder="Enter your username"
+        autocomplete="off" autocapitalize="off" autocorrect="off"
+        onkeydown="if(event.key==='Enter')document.getElementById('mlPassword').focus()">
+    </div>
+    <div class="field" style="margin-bottom:16px;">
+      <label>Password</label>
+      <input type="password" id="mlPassword" placeholder="Enter your password"
+        onkeydown="if(event.key==='Enter')doMainLogin()">
+    </div>
+    <div class="main-login-error" id="mlError">Invalid username or password</div>
+    <button class="btn btn-primary btn-full" id="mlBtn" onclick="doMainLogin()">
+      Login
+    </button>
+    <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:16px;">
+      Contact your admin if you forgot your password
+    </p>
+  </div>
+</div>
+
 <div id="loginOverlay">
   <div class="login-box">
     <div class="login-title">Admin Login</div>
@@ -597,6 +681,12 @@ tr:hover td { background:rgba(255,255,255,0.02); }
     <span class="admin-badge" onclick="requireAdmin()" id="adminBadge">
       <span>👤 </span><span id="adminBadgeText">ENGINEER</span>
     </span>
+    <button onclick="showScreen('superadmin')" id="btnSuperAdmin"
+      title="Super Admin"
+      style="background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.3);color:#C0392B;
+             border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">
+      ⚙ SuperAdmin
+    </button>
     <div class="status-dot" id="connectionDot" title="Checking connection..."></div>
   </div>
 </div>
@@ -737,13 +827,24 @@ tr:hover td { background:rgba(255,255,255,0.02); }
               onkeydown="handleQtyKeydown(event)"
               oninput="sanitizeQtyInput(this)"
               onpaste="handleQtyPaste(event)"
+              onfocus="qtyLastKeyTime=0; qtyScannerMode=false;"
               autocomplete="off">
             <span id="qtyUnitLabel" style="font-family:var(--mono);font-size:12px;font-weight:600;color:#1A7A2E;white-space:nowrap;min-width:60px;display:none;"></span>
           </div>
         </div>
         <div class="field">
           <label>Remarks <span style="color:var(--text3)">(Optional)</span></label>
-          <input type="text" id="palletRemarks" placeholder="Any notes...">
+          <input type="text" id="palletRemarks" placeholder="Any notes..."
+            onkeydown="
+              if(event.key==='Tab' && !event.shiftKey){
+                event.preventDefault();
+                document.getElementById('submitBtn').focus();
+              }
+              if(event.key==='Enter' && !isSubmitting){
+                event.preventDefault();
+                submitScan();
+              }
+            ">
         </div>
       </div>
 
@@ -781,7 +882,10 @@ tr:hover td { background:rgba(255,255,255,0.02); }
       </div>
 
       <div style="display:flex;gap:10px;margin-top:14px;">
-        <button class="btn btn-primary" id="submitBtn" onclick="submitScan()" style="flex:1;">
+        <button class="btn btn-primary" id="submitBtn" onclick="submitScan()"
+          tabindex="0"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();if(!isSubmitting)submitScan();}"
+          style="flex:1;outline-offset:3px;">
           Submit Scan
         </button>
         <button class="btn btn-secondary" onclick="clearScanForm()">Clear</button>
@@ -1167,6 +1271,78 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         <div class="empty-state">
           <div class="empty-state-icon">⬆</div>
           <div class="empty-state-text">No scan outs yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ╔══════════════════════════════════╗ -->
+  <!-- ║   SCREEN — SUPER ADMIN           ║ -->
+  <!-- ╚══════════════════════════════════╝ -->
+  <div class="screen" id="screenSuperadmin">
+    <div class="section-header">
+      <div class="section-title">⚙ Super Admin Panel</div>
+      <div class="section-sub">View, edit and delete pallet scan records</div>
+    </div>
+
+    <!-- Login Card -->
+    <div class="card" id="saLoginCard">
+      <div class="card-title">🔐 Super Admin Login</div>
+      <div style="max-width:340px;">
+        <div class="field" style="margin-bottom:12px;">
+          <label>Super Admin Password</label>
+          <input type="password" id="saPwInput"
+            placeholder="Enter superadmin password..."
+            onkeydown="if(event.key==='Enter')doSuperadminLogin()">
+        </div>
+        <div class="alert alert-error" id="saLoginError" style="margin-bottom:10px;">
+          <span class="alert-icon">⚠</span>
+          <span id="saLoginErrorMsg">Invalid password</span>
+        </div>
+        <button class="btn btn-primary" onclick="doSuperadminLogin()">
+          Login as Super Admin
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel (shown after login) -->
+    <div id="saPanel" style="display:none;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+        <div class="stat-card" style="flex:1;min-width:100px;">
+          <div class="stat-val stat-accent" id="saTotalRec">—</div>
+          <div class="stat-label">Total Records</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:100px;">
+          <div class="stat-val stat-green" id="saInStock">—</div>
+          <div class="stat-label">In Stock</div>
+        </div>
+        <div class="stat-card" style="flex:1;min-width:100px;">
+          <div class="stat-val" id="saFinished">—</div>
+          <div class="stat-label">Finished</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadSARecords()">↻ Refresh</button>
+        <button class="btn btn-danger btn-sm" onclick="doSALogout()">Logout</button>
+      </div>
+
+      <!-- Search -->
+      <div class="card" style="padding:10px 14px;margin-bottom:10px;">
+        <input type="text" id="saSearch"
+          placeholder="🔍 Search pallet, PO, material, engineer..."
+          oninput="filterSARecords()" style="width:100%;">
+      </div>
+
+      <div class="alert alert-warn" id="saUnsavedWarn" style="margin-bottom:10px;display:none;">
+        <span class="alert-icon">!</span>
+        ⚠ You have unsaved changes — click <strong>Save</strong> on each row.
+      </div>
+
+      <!-- Table -->
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div id="saTableWrap">
+          <div class="empty-state">
+            <div class="empty-state-icon">⚙</div>
+            <div class="empty-state-text">Loading...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1618,17 +1794,286 @@ function hideOutAlerts() {
   });
 }
 
+/* ════════════════════════════════════════════════════
+   SUPERADMIN SYSTEM
+   Password: super@admin123 (change this!)
+   Access: topbar ⚙ button (hidden until login)
+   ════════════════════════════════════════════════════ */
+const SUPERADMIN_PASSWORD = 'super@admin123';
+let isSuperAdmin   = false;
+let saAllRecords   = [];
+let saFilteredRecs = [];
+
+function doSuperadminLogin() {
+  const pw     = document.getElementById('saPwInput').value.trim();
+  const errEl  = document.getElementById('saLoginError');
+  const errMsg = document.getElementById('saLoginErrorMsg');
+
+  if (pw === SUPERADMIN_PASSWORD) {
+    isSuperAdmin = true;
+    document.getElementById('saLoginCard').style.display = 'none';
+    document.getElementById('saPanel').style.display     = 'block';
+    document.getElementById('saPwInput').value = '';
+    errEl.classList.remove('show');
+    loadSARecords();
+  } else {
+    errMsg.textContent = 'Invalid superadmin password. Try again.';
+    errEl.classList.add('show');
+    document.getElementById('saPwInput').value = '';
+    document.getElementById('saPwInput').focus();
+  }
+}
+
+function doSALogout() {
+  isSuperAdmin = false;
+  document.getElementById('saLoginCard').style.display = 'block';
+  document.getElementById('saPanel').style.display     = 'none';
+  document.getElementById('btnSuperAdmin').style.display = 'none';
+  showScreen('scan');
+}
+
+async function loadSARecords() {
+  const wrap = document.getElementById('saTableWrap');
+  wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚙</div><div class="empty-state-text">Loading records...</div></div>';
+  const res = await callAPI('getRecords');
+  if (res.success) {
+    saAllRecords = res.data || [];
+    document.getElementById('saTotalRec').textContent  = saAllRecords.length;
+    document.getElementById('saInStock').textContent   = saAllRecords.filter(r => r.status !== 'Finished').length;
+    document.getElementById('saFinished').textContent  = saAllRecords.filter(r => r.status === 'Finished').length;
+    filterSARecords();
+  } else {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><div class="empty-state-text">Failed to load: ' + (res.error||'') + '</div></div>';
+  }
+}
+
+function filterSARecords() {
+  const q = (document.getElementById('saSearch')?.value || '').toLowerCase().trim();
+  saFilteredRecs = q
+    ? saAllRecords.filter(r =>
+        (r.palletNumber||'').toLowerCase().includes(q) ||
+        (r.poNumber||'').toLowerCase().includes(q) ||
+        (r.materialType||'').toLowerCase().includes(q) ||
+        (r.incharge||'').toLowerCase().includes(q) ||
+        (r.lineCode||'').toLowerCase().includes(q))
+    : [...saAllRecords];
+  renderSATable();
+}
+
+function renderSATable() {
+  const wrap = document.getElementById('saTableWrap');
+  if (!saFilteredRecs.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚙</div><div class="empty-state-text">No records found</div></div>';
+    return;
+  }
+
+  const MATERIALS = [
+    'Front Glass','Back Glass','Front EPE','Front EVA','Front POE',
+    'Back POE','Back EPE','Back EVA','Ribbon Spool(0.24mm)','Ribbon Spool(0.26mm)',
+    'Busbar Spool(4*4)mm','Busbar Spool(4*6)mm','RFID','Cell Fixation Tape',
+    'G2G Tape','Teflon Roll','Aluminium Frame','RTV Drum',
+    'Part A','Part B','Corner','JB Cap','JB'
+  ];
+
+  const show = saFilteredRecs.slice(0, 100);
+  let html = '<div class="table-wrap"><table class="sa-table"><thead><tr>' +
+    '<th>#</th><th>Pallet #</th><th>PO</th><th>Line</th>' +
+    '<th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th>' +
+    '<th>Status</th><th>Scan In</th><th style="min-width:120px;">Actions</th>' +
+    '</tr></thead><tbody>';
+
+  show.forEach(function(r, idx) {
+    var id  = String(r.id);
+    // Store ORIGINAL pallet number in data attribute — used for find-by-pallet in Code.gs
+    var origPN = (r.palletNumber||'').replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+
+    // Build material dropdown options
+    var matOptions = MATERIALS.map(function(m) {
+      return '<option value="' + m + '" ' + (r.materialType === m ? 'selected' : '') + '>' + m + '</option>';
+    }).join('');
+
+    html +=
+      '<tr id="saRow_' + id + '">' +
+      '<td style="text-align:center;font-size:11px;color:var(--text3);">' + (idx+1) + '</td>' +
+      '<td><input type="text" value="' + (r.palletNumber||'') + '" id="sa_p_'  + id + '" data-id="' + id + '" oninput="markDirty(this.dataset.id)"></td>' +
+      '<td><input type="text" value="' + (r.poNumber||'')     + '" id="sa_po_' + id + '" data-id="' + id + '" oninput="markDirty(this.dataset.id)"></td>' +
+      '<td><input type="text" value="' + (r.lineCode||'')     + '" id="sa_l_'  + id + '" data-id="' + id + '" oninput="markDirty(this.dataset.id)" style="width:65px;"></td>' +
+      // ── Material Type DROPDOWN ──
+      '<td><select id="sa_m_' + id + '" data-id="' + id + '" onchange="markDirty(this.dataset.id)" style="min-width:130px;">' +
+        '<option value="' + (r.materialType||'') + '" selected>' + (r.materialType||'Select...') + '</option>' +
+        matOptions +
+      '</select></td>' +
+      '<td><select id="sa_s_' + id + '" data-id="' + id + '" onchange="markDirty(this.dataset.id)">' +
+        '<option ' + (r.shift==='A'?'selected':'') + '>A</option>' +
+        '<option ' + (r.shift==='B'?'selected':'') + '>B</option>' +
+        '<option ' + (r.shift==='C'?'selected':'') + '>C</option>' +
+      '</select></td>' +
+      '<td><input type="text" value="' + (r.incharge||'')  + '" id="sa_i_'  + id + '" data-id="' + id + '" oninput="markDirty(this.dataset.id)"></td>' +
+      '<td><input type="text" value="' + (r.palletQty||'') + '" id="sa_q_'  + id + '" data-id="' + id + '" oninput="markDirty(this.dataset.id)" style="width:55px;"></td>' +
+      '<td><select id="sa_st_' + id + '" data-id="' + id + '" onchange="markDirty(this.dataset.id)">' +
+        '<option ' + (r.status!=='Finished'?'selected':'') + '>In Stock</option>' +
+        '<option ' + (r.status==='Finished'?'selected':'')  + '>Finished</option>' +
+      '</select></td>' +
+      '<td style="font-size:10px;color:var(--text3);white-space:nowrap;">' + (r.scannedOn||'') + '</td>' +
+      '<td style="display:flex;gap:4px;padding:5px;">' +
+        '<button class="btn-sa-save" id="saBtn_' + id + '" data-id="' + id + '" data-origpn="' + origPN + '" onclick="saveRec(this.dataset.id, this.dataset.origpn)" style="display:none;">Save</button> ' +
+        // Pass original pallet number stored in record, not from editable input
+        '<button class="btn-sa-delete" data-id="' + id + '" data-origpn="' + origPN + '" onclick="delRec(this.dataset.id, this.dataset.origpn)">Del</button>' +
+      '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  if (saFilteredRecs.length > 100) {
+    html += '<p style="font-size:12px;color:var(--text3);padding:8px 12px;">Showing 100 of ' + saFilteredRecs.length + '. Use search to filter.</p>';
+  }
+  wrap.innerHTML = html;
+  document.getElementById('saUnsavedWarn').style.display = 'none';
+}
+function markDirty(id) {
+  const btn = document.getElementById('saBtn_' + id);
+  if (btn) btn.style.display = 'inline-block';
+  document.getElementById('saUnsavedWarn').style.display = 'block';
+}
+
+async function saveRec(id, originalPallet) {
+  const btn = document.getElementById('saBtn_' + id);
+  btn.disabled = true; btn.textContent = '⏳';
+  const data = {
+    recordId:       id,
+    originalPallet: originalPallet || '', // original pallet to FIND the row
+    palletNumber:   (document.getElementById('sa_p_'  + id)?.value||'').trim().toUpperCase(),
+    poNumber:       (document.getElementById('sa_po_' + id)?.value||'').trim().toUpperCase(),
+    lineCode:       (document.getElementById('sa_l_'  + id)?.value||'').trim(),
+    materialType:   (document.getElementById('sa_m_'  + id)?.value||'').trim(),
+    shift:          (document.getElementById('sa_s_'  + id)?.value||''),
+    incharge:       (document.getElementById('sa_i_'  + id)?.value||'').trim(),
+    palletQty:      (document.getElementById('sa_q_'  + id)?.value||'').trim(),
+    status:         (document.getElementById('sa_st_' + id)?.value||'')
+  };
+  const res = await callAPI('updateRecord', data);
+  btn.disabled = false;
+  if (res.success) {
+    btn.textContent = '✓ Saved';
+    btn.style.background = 'rgba(26,122,46,0.2)';
+    setTimeout(() => { btn.style.display = 'none'; btn.textContent = '💾 Save'; btn.style.background = ''; }, 2000);
+    // update local
+    const rec = saAllRecords.find(r => r.id === id);
+    if (rec) Object.assign(rec, data);
+  } else {
+    btn.textContent = '❌';
+    setTimeout(() => { btn.textContent = '💾 Save'; btn.disabled = false; }, 2000);
+    alert('Save failed: ' + (res.error || 'Unknown error'));
+  }
+}
+
+async function delRec(id, origPalletNum) {
+  const displayPallet = origPalletNum || id;
+  if (!confirm('⚠ Delete pallet "' + displayPallet + '"?\n\nThis PERMANENTLY removes this record from Google Sheet. Cannot be undone!')) return;
+
+  const res = await callAPI('deleteRecord', { recordId: id, palletNumber: origPalletNum });
+  if (res.success) {
+    saAllRecords   = saAllRecords.filter(function(r) { return r.id !== id; });
+    saFilteredRecs = saFilteredRecs.filter(function(r) { return r.id !== id; });
+    document.getElementById('saTotalRec').textContent = saAllRecords.length;
+    document.getElementById('saInStock').textContent  = saAllRecords.filter(function(r) { return r.status !== 'Finished'; }).length;
+    document.getElementById('saFinished').textContent = saAllRecords.filter(function(r) { return r.status === 'Finished'; }).length;
+    renderSATable();
+  } else {
+    alert('Delete failed: ' + (res.error || 'Unknown error'));
+  }
+}
+
+/* ════ MAIN LOGIN STATE ════ */
+let currentUser = null; // { username, fullName } after login
+
 window.onload = () => {
   checkConfig();
+
+  // Copy Waaree logo to main login page
+  const logoSrc = document.querySelector('img[alt="Waaree Logo"]');
+  if (logoSrc) document.getElementById('mainLoginLogo').src = logoSrc.src;
+
+  // ── Hash-based routing — support #superadmin ──
+  const hash = window.location.hash.replace('#', '');
+  if (hash === 'superadmin') {
+    // Hide main login — go straight to superadmin
+    document.getElementById('mainLoginOverlay').style.display = 'none';
+    loadAllData();
+    showScreen('superadmin');
+    setTimeout(() => document.getElementById('saPwInput')?.focus(), 300);
+  } else {
+    // Show main login on startup
+    setTimeout(() => document.getElementById('mlUsername')?.focus(), 200);
+  }
+};
+
+async function doMainLogin() {
+  const username = (document.getElementById('mlUsername').value || '').trim();
+  const password = (document.getElementById('mlPassword').value || '').trim();
+  const errEl    = document.getElementById('mlError');
+  const btn      = document.getElementById('mlBtn');
+
+  if (!username || !password) {
+    errEl.textContent = 'Please enter both username and password.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Verifying...';
+  errEl.style.display = 'none';
+
+  const res = await callAPI('engineerLogin', { username, password });
+
+  btn.disabled = false;
+  btn.textContent = 'Login';
+
+  if (res.success) {
+    currentUser = { username: res.username, fullName: res.fullName || res.username };
+
+    // Hide main login overlay
+    document.getElementById('mainLoginOverlay').style.display = 'none';
+
+    // Update ENGINEER badge with logged in user name
+    const badge = document.getElementById('adminBadgeText');
+    if (badge) badge.textContent = currentUser.fullName || currentUser.username;
+
+    // Auto-fill incharge name in scan screen
+    const incharge = document.getElementById('inchargeName');
+    if (incharge && !incharge.value) incharge.value = currentUser.fullName || currentUser.username;
+
+    // Load all data now
+    loadAllData();
+
+    // Init scanner
+    scannerActive = true;
+    setTimeout(() => focusScannerInput(), 400);
+
+  } else {
+    errEl.textContent = res.error || 'Invalid username or password. Please try again.';
+    errEl.style.display = 'block';
+    document.getElementById('mlPassword').value = '';
+    document.getElementById('mlPassword').focus();
+  }
+}
+
+function loadAllData() {
   if (SCRIPT_URL && SCRIPT_URL.startsWith('https://script.google.com')) {
     loadPOs();
     loadRecords();
     loadDashboard();
   }
-  // Init scanner hidden input on load
-  scannerActive = true;
-  setTimeout(() => focusScannerInput(), 300);
-};
+}
+
+// Hash change handler
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.replace('#', '');
+  if (hash === 'superadmin') {
+    showScreen('superadmin');
+    setTimeout(() => document.getElementById('saPwInput')?.focus(), 200);
+  }
+});
 
 function checkConfig() {
   const banner = document.getElementById('configBanner');
@@ -1652,12 +2097,22 @@ function saveScriptUrl() {
 
 /* ════ SCREEN NAV ════ */
 function showScreen(name) {
+  const screens = { scan:'screenScan', po:'screenPo', records:'screenRecords', dashboard:'screenDashboard', setup:'screenSetup', scanout:'screenScanout', superadmin:'screenSuperadmin' };
+  const navs    = { scan:'navScan', po:'navPo', records:'navRecords', dashboard:'navDashboard', scanout:'navScanout', superadmin:null };
+
+  // Safety check — ignore unknown screen names
+  if (!screens[name]) { console.warn('Unknown screen:', name); return; }
+  const screenEl = document.getElementById(screens[name]);
+  if (!screenEl) { console.warn('Screen element not found:', screens[name]); return; }
+
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const screens = { scan:'screenScan', po:'screenPo', records:'screenRecords', dashboard:'screenDashboard', setup:'screenSetup', scanout:'screenScanout' };
-  const navs = { scan:'navScan', po:'navPo', records:'navRecords', dashboard:'navDashboard', scanout:'navScanout' };
-  document.getElementById(screens[name]).classList.add('active');
-  if (navs[name]) document.getElementById(navs[name]).classList.add('active');
+
+  screenEl.classList.add('active');
+  if (navs[name]) {
+    const navEl = document.getElementById(navs[name]);
+    if (navEl) navEl.classList.add('active');
+  }
 
   if (name === 'scan') {
     loadPOs();
@@ -1674,8 +2129,12 @@ function showScreen(name) {
   } else {
     outScannerActive = false;
   }
-  if (name === 'po') loadPOs();
-  if (name === 'records') loadRecords();
+  if (name === 'superadmin') {
+    if (isSuperAdmin) loadSARecords();
+    else setTimeout(() => document.getElementById('saPwInput')?.focus(), 200);
+  }
+  if (name === 'po')        loadPOs();
+  if (name === 'records')   loadRecords();
   if (name === 'dashboard') loadDashboard();
 }
 
@@ -1975,6 +2434,25 @@ function getMockData(action, data) {
     const po = mockPOs.find(p => p.poNumber === data.poNumber);
     if (po) po.status = data.status;
     return { success:true };
+  }
+  if (action === 'updateRecord') {
+    const rec = mockRecords.find(r => r.id === data.recordId);
+    if (rec) {
+      rec.palletNumber = data.palletNumber;
+      rec.poNumber     = data.poNumber;
+      rec.lineCode     = data.lineCode;
+      rec.materialType = data.materialType;
+      rec.shift        = data.shift;
+      rec.incharge     = data.incharge;
+      rec.palletQty    = data.palletQty;
+      rec.status       = data.status;
+    }
+    return { success:true, message:'Record updated (demo mode)' };
+  }
+  if (action === 'deleteRecord') {
+    const idx = mockRecords.findIndex(r => r.id === data.recordId);
+    if (idx > -1) mockRecords.splice(idx, 1);
+    return { success:true, message:'Record deleted (demo mode)' };
   }
   return { success:false, error:'Unknown action' };
 }
@@ -2285,38 +2763,86 @@ function compressImage(dataUrl, maxWidth, quality, callback) {
    Blocked:  USB scanner input (fast keystrokes < 50ms apart)
              letters, special chars, spaces, +, -, e, E
    ═══════════════════════════════════════════════════════ */
-let qtyLastKeyTime = 0; // tracks timing between keystrokes
+let qtyLastKeyTime  = 0; // tracks timing between keystrokes
+let qtyScannerMode  = false; // true if scanner input detected
+let qtyScannerTimer = null;
 
 function handleQtyKeydown(event) {
-  // Always allow: Backspace, Delete, Tab, Arrow keys, Home, End
-  const controlKeys = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
-  if (controlKeys.includes(event.key)) {
-    qtyLastKeyTime = 0; // reset timing on control keys
-    return;
+  const now = Date.now();
+  const gap = now - qtyLastKeyTime;
+
+  // ── SCANNER DETECTION ─────────────────────────────────
+  // Scanner fires chars very fast (< 50ms gap)
+  // First key sets qtyLastKeyTime, second key within 50ms = scanner
+  if (event.key.length === 1 && !event.ctrlKey && !event.altKey) {
+    if (qtyLastKeyTime > 0 && gap < 50) {
+      // SCANNER DETECTED — set flag, clear field
+      qtyScannerMode = true;
+      event.preventDefault();
+      // Clear entire qty field immediately
+      event.target.value = '';
+      qtyLastKeyTime = 0;
+      // Show warning
+      showAlert('scanWarn', '⚠ Scanner input blocked! Qty field accepts manual keyboard typing only.');
+      // Reset scanner mode after 2 seconds
+      clearTimeout(qtyScannerTimer);
+      qtyScannerTimer = setTimeout(() => {
+        qtyScannerMode = false;
+        qtyLastKeyTime = 0;
+      }, 2000);
+      return;
+    }
+    // If scanner mode is active — block all chars until reset
+    if (qtyScannerMode) {
+      event.preventDefault();
+      event.target.value = '';
+      return;
+    }
   }
 
-  // Block Enter (no auto-submit)
-  if (event.key === 'Enter') { event.preventDefault(); return; }
-
-  // ── SCANNER SPEED DETECTION ──────────────────────────
-  // USB scanner sends chars very fast (< 50ms apart)
-  // Human typing is slow (> 150ms apart)
-  const now     = Date.now();
-  const gap     = now - qtyLastKeyTime;
-  qtyLastKeyTime = now;
-
-  if (qtyLastKeyTime > 0 && gap < 50 && event.key.length === 1) {
-    // Too fast — this is a scanner, not human typing
+  // ── TAB — move cursor to Remarks field ──
+  if (event.key === 'Tab' && !event.shiftKey) {
     event.preventDefault();
-    showAlert('scanWarn', '⚠ Scanner input blocked in Qty field — please type quantity manually using keyboard.');
+    qtyLastKeyTime = 0;
+    const remarks = document.getElementById('palletRemarks');
+    if (remarks) remarks.focus();
     return;
   }
 
-  // Allow: digits 0-9
-  if (/^[0-9]$/.test(event.key)) return;
+  // ── ENTER — submit ONLY if not scanner mode ──
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    if (qtyScannerMode) {
+      // Scanner fired Enter — block submit, clear field
+      event.target.value = '';
+      qtyScannerMode = false;
+      qtyLastKeyTime = 0;
+      showAlert('scanWarn', '⚠ Scanner input blocked! Please type quantity manually.');
+      return;
+    }
+    const val = event.target.value.trim();
+    if (val && !isNaN(parseFloat(val)) && !isSubmitting) {
+      submitScan();
+    }
+    return;
+  }
+
+  // Always allow: Backspace, Delete, Arrow keys, Home, End
+  const controlKeys = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'];
+  if (controlKeys.includes(event.key)) {
+    qtyLastKeyTime = 0;
+    return;
+  }
+
+  // Allow: digits 0-9 — update timing
+  if (/^[0-9]$/.test(event.key)) {
+    qtyLastKeyTime = now;
+    return;
+  }
 
   // Allow: one decimal point only
   if (event.key === '.' || event.key === ',') {
+    qtyLastKeyTime = now;
     if (event.target.value.includes('.')) {
       event.preventDefault();
       return;
