@@ -3216,9 +3216,8 @@ async function submitScan() {
     }, 300);
 
   } else if (res.duplicate) {
-    showAlert('scanError', `⛔ DUPLICATE: "${finalPalletNumber}" already scanned — ${res.error}`);
     clearPalletScan();
-    // After duplicate → also go back to barcode box
+    alert('⛔ DUPLICATE PALLET!\n\nPallet "' + finalPalletNumber + '" was already scanned.\n\n' + (res.error || ''));
     setTimeout(() => focusScannerInput(), 300);
   } else {
     showAlert('scanError', res.error || 'Scan failed. Please try again.');
