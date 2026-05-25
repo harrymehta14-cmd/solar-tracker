@@ -549,27 +549,33 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 }
 
 /* ── SUPERADMIN EDITABLE TABLE ── */
+.sa-table { min-width:1200px; }
 .sa-table input[type=text] {
   width:100%;border:1px solid var(--border2);border-radius:4px;
-  padding:3px 6px;font-size:11px;background:var(--bg3);color:var(--text);
+  padding:4px 8px;font-size:12px;background:var(--bg3);color:var(--text);
+  min-width:80px;
 }
 .sa-table input[type=text]:focus {
   outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,122,46,0.15);
 }
 .sa-table select {
-  border:1px solid var(--border2);border-radius:4px;padding:3px 4px;
-  font-size:11px;background:var(--bg3);color:var(--text);
+  border:1px solid var(--border2);border-radius:4px;padding:4px 6px;
+  font-size:12px;background:var(--bg3);color:var(--text);width:100%;
 }
+.sa-table td { padding:8px 6px !important; vertical-align:middle !important; }
+.sa-table th { padding:10px 6px !important; white-space:nowrap; }
 .btn-sa-delete {
   background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.3);
-  color:#C0392B;border-radius:6px;padding:3px 8px;font-size:11px;
-  cursor:pointer;font-weight:500;white-space:nowrap;
+  color:#C0392B;border-radius:6px;padding:5px 12px;font-size:12px;
+  cursor:pointer;font-weight:600;white-space:nowrap;
 }
+.btn-sa-delete:hover { background:rgba(192,57,43,0.25); }
 .btn-sa-save {
   background:rgba(26,122,46,0.12);border:1px solid rgba(26,122,46,0.3);
-  color:var(--accent);border-radius:6px;padding:3px 8px;font-size:11px;
-  cursor:pointer;font-weight:500;display:none;white-space:nowrap;
+  color:var(--accent);border-radius:6px;padding:5px 12px;font-size:12px;
+  cursor:pointer;font-weight:600;display:none;white-space:nowrap;
 }
+.btn-sa-save:hover { background:rgba(26,122,46,0.25); }
 
 /* ── SHIFT TABS ── */
 .shift-tabs { display:flex; gap:6px; margin-bottom:14px; }
@@ -767,6 +773,9 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             <option>Corner</option>
             <option>JB Cap</option>
             <option>JB</option>
+            <option>EVA Patch Roll</option>
+            <option>Back Label</option>
+            <option>Blank Barcode Roll</option>
           </select>
         </div>
       </div>
@@ -1043,6 +1052,9 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option>Aluminium Frame</option><option>RTV Drum</option>
           <option>Part A</option><option>Part B</option>
           <option>Corner</option><option>JB Cap</option><option>JB</option>
+          <option>EVA Patch Roll</option>
+          <option>Back Label</option>
+          <option>Blank Barcode Roll</option>
         </select>
         <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
           <span style="font-size:11px;color:var(--text3);white-space:nowrap;">From</span>
@@ -1135,6 +1147,9 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             <option>Aluminium Frame</option><option>RTV Drum</option>
             <option>Part A</option><option>Part B</option>
             <option>Corner</option><option>JB Cap</option><option>JB</option>
+            <option>EVA Patch Roll</option>
+            <option>Back Label</option>
+            <option>Blank Barcode Roll</option>
           </select>
         </div>
 
@@ -1881,14 +1896,23 @@ function renderSATable() {
     'Back POE','Back EPE','Back EVA','Ribbon Spool(0.24mm)','Ribbon Spool(0.26mm)',
     'Busbar Spool(4*4)mm','Busbar Spool(4*6)mm','RFID','Cell Fixation Tape',
     'G2G Tape','Teflon Roll','Aluminium Frame','RTV Drum',
-    'Part A','Part B','Corner','JB Cap','JB'
+    'Part A','Part B','Corner','JB Cap','JB',
+    'EVA Patch Roll','Back Label','Blank Barcode Roll'
   ];
 
   const show = saFilteredRecs.slice(0, 100);
   let html = '<div class="table-wrap"><table class="sa-table"><thead><tr>' +
-    '<th>#</th><th>Pallet #</th><th>PO</th><th>Line</th>' +
-    '<th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th>' +
-    '<th>Status</th><th>Scan In</th><th style="min-width:120px;">Actions</th>' +
+    '<th style="width:40px;text-align:center;">#</th>' +
+    '<th style="min-width:160px;">Pallet #</th>' +
+    '<th style="min-width:140px;">PO Number</th>' +
+    '<th style="min-width:80px;">Line</th>' +
+    '<th style="min-width:180px;">Material</th>' +
+    '<th style="min-width:70px;">Shift</th>' +
+    '<th style="min-width:120px;">In-charge</th>' +
+    '<th style="min-width:80px;">Qty</th>' +
+    '<th style="min-width:110px;">Status</th>' +
+    '<th style="min-width:140px;">Scan In</th>' +
+    '<th style="min-width:150px;">Actions</th>' +
     '</tr></thead><tbody>';
 
   show.forEach(function(r, idx) {
@@ -1925,9 +1949,8 @@ function renderSATable() {
       '</select></td>' +
       '<td style="font-size:10px;color:var(--text3);white-space:nowrap;">' + (r.scannedOn||'') + '</td>' +
       '<td style="display:flex;gap:4px;padding:5px;">' +
-        '<button class="btn-sa-save" id="saBtn_' + id + '" data-id="' + id + '" data-origpn="' + origPN + '" onclick="saveRec(this.dataset.id, this.dataset.origpn)" style="display:none;">Save</button> ' +
-        // Pass original pallet number stored in record, not from editable input
-        '<button class="btn-sa-delete" data-id="' + id + '" data-origpn="' + origPN + '" onclick="delRec(this.dataset.id, this.dataset.origpn)">Del</button>' +
+        '<button class="btn-sa-save" id="saBtn_' + id + '" data-id="' + id + '" data-origpn="' + origPN + '" onclick="saveRec(this.dataset.id, this.dataset.origpn)" style="display:none;">💾 Save</button> ' +
+        '<button class="btn-sa-delete" data-id="' + id + '" data-origpn="' + origPN + '" onclick="delRec(this.dataset.id, this.dataset.origpn)">🗑 Delete</button>' +
       '</td>' +
       '</tr>';
   });
@@ -2580,6 +2603,9 @@ const MATERIAL_UNITS = {
   'Corner':                 'nos',
   'JB Cap':                 'nos',
   'JB':                     'nos',
+  'EVA Patch Roll':         'sq.m',
+  'Back Label':             'nos',
+  'Blank Barcode Roll':     'nos',
 };
 
 /* Called when material type dropdown changes */
@@ -2619,7 +2645,10 @@ const MAT_GROUP_2_OPTIONAL = new Set([
   'Front POE',
   'Back POE',
   'Back EPE',
-  'Back EVA'
+  'Back EVA',
+  'EVA Patch Roll',
+  'Back Label',
+  'Blank Barcode Roll'
 ]);
 
 let capturedImageBase64 = '';
