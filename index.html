@@ -734,7 +734,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <input type="text" id="inchargeName" placeholder="Enter your name..." autocomplete="off">
         </div>
         <div class="field">
-          <label>Purchase Order *</label>
+          <label>Production Order *</label>
           <select id="scanPoSelect" onchange="onPoSelected()">
             <option value="">— Select PO —</option>
           </select>
@@ -923,7 +923,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
   <div class="screen" id="screenPo">
     <div class="section-header">
       <div class="section-title">PO Management</div>
-      <div class="section-sub">Add and manage Purchase Orders · Admin only</div>
+      <div class="section-sub">Add and manage Production Orders · Admin only</div>
     </div>
 
     <div class="alert alert-warn" id="poAdminWarn" style="display:flex;">
@@ -933,7 +933,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
     <!-- Add PO Form -->
     <div class="card" id="addPoCard" style="display:none;">
-      <div class="card-title">Add New Purchase Order</div>
+      <div class="card-title">Add New Production Order</div>
       <div class="form-row cols-3">
         <div class="field">
           <label>PO Number *</label>
@@ -975,14 +975,14 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         <span id="poSuccessMsg">PO added!</span>
       </div>
       <button class="btn btn-primary btn-full" id="addPoBtn" onclick="addPO()">
-        Add Purchase Order
+        Add Production Order
       </button>
     </div>
 
     <!-- PO List -->
     <div class="card">
       <div class="card-title" style="justify-content:space-between;">
-        <span>All Purchase Orders</span>
+        <span>All Production Orders</span>
         <button class="btn btn-secondary btn-sm" onclick="loadPOs()">↻ Refresh</button>
       </div>
       <div id="poListWrap">
@@ -2557,7 +2557,7 @@ async function addPO() {
 
   const res = await callAPI('addPO', { poNumber, poQty, lineCode, poStatus });
 
-  btn.disabled = false; btn.textContent = 'Add Purchase Order';
+  btn.disabled = false; btn.textContent = 'Add Production Order';
   if (res.success) {
     showAlert('poSuccess', `PO "${poNumber}" added successfully!${SCRIPT_URL?'':' (Demo mode)'}`);
     document.getElementById('poNumber').value = '';
@@ -3182,7 +3182,7 @@ async function submitScan() {
 
   if (!shift)        { showAlert('scanError', 'Please select a Shift (A, B or C).'); isSubmitting = false; return; }
   if (!incharge)     { showAlert('scanError', 'Please enter In-charge Name.'); isSubmitting = false; return; }
-  if (!poNumber)     { showAlert('scanError', 'Please select a Purchase Order.'); isSubmitting = false; return; }
+  if (!poNumber)     { showAlert('scanError', 'Please select a Production Order.'); isSubmitting = false; return; }
   if (!materialType) { showAlert('scanError', 'Please select Material Type.'); isSubmitting = false; return; }
 
   // Pallet number validation depends on material group
