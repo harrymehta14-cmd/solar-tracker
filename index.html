@@ -735,9 +735,21 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
         <div class="field">
           <label>Production Order *</label>
-          <select id="scanPoSelect" onchange="onPoSelected()">
-            <option value="">— Select PO —</option>
-          </select>
+          <div style="position:relative;" id="poSearchWrap">
+            <input type="text" id="poSearchInput"
+              placeholder="🔍 Type to search PO..."
+              autocomplete="off"
+              oninput="onPOSearchInput()"
+              onfocus="showPOSearchDropdown()"
+              onblur="hidePOSearchDropdown()"
+              style="width:100%;">
+            <input type="hidden" id="scanPoSelect">
+            <div id="poSearchList" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;
+              background:var(--bg2);border:1px solid var(--border2);border-radius:8px;
+              box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:300;max-height:200px;overflow-y:auto;">
+              <div id="poSearchItems"></div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="form-row cols-2">
@@ -748,35 +760,21 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
         <div class="field">
           <label>Material Type *</label>
-          <select id="scanMaterialType" onchange="onMaterialSelected()">
-            <option value="">— Select Material —</option>
-            <option>Front Glass</option>
-            <option>Back Glass</option>
-            <option>Front EPE</option>
-            <option>Front EVA</option>
-            <option>Front POE</option>
-            <option>Back POE</option>
-            <option>Back EPE</option>
-            <option>Back EVA</option>
-            <option>Ribbon Spool(0.24mm)</option>
-            <option>Ribbon Spool(0.26mm)</option>
-            <option>Busbar Spool(4*4)mm</option>
-            <option>Busbar Spool(4*6)mm</option>
-            <option>RFID</option>
-            <option>Cell Fixation Tape</option>
-            <option>G2G Tape</option>
-            <option>Teflon Roll</option>
-            <option>Aluminium Frame</option>
-            <option>RTV Drum</option>
-            <option>Part A</option>
-            <option>Part B</option>
-            <option>Corner</option>
-            <option>JB Cap</option>
-            <option>JB</option>
-            <option>EVA Patch Roll</option>
-            <option>Back Label</option>
-            <option>Blank Barcode Roll</option>
-          </select>
+          <div style="position:relative;" id="matSearchWrap">
+            <input type="text" id="matSearchInput"
+              placeholder="🔍 Type to search material..."
+              autocomplete="off"
+              oninput="onMatSearchInput()"
+              onfocus="showMatSearchDropdown()"
+              onblur="hideMatSearchDropdown()"
+              style="width:100%;">
+            <input type="hidden" id="scanMaterialType">
+            <div id="matSearchList" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;
+              background:var(--bg2);border:1px solid var(--border2);border-radius:8px;
+              box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:300;max-height:220px;overflow-y:auto;">
+              <div id="matSearchItems"></div>
+            </div>
+          </div>
         </div>
       </div>
       <!-- PO progress removed as per requirement -->
@@ -1046,7 +1044,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
           <option>Front POE</option><option>Back POE</option>
           <option>Back EVA</option><option>Back EPE</option>
           <option>Ribbon Spool(0.24mm)</option><option>Ribbon Spool(0.26mm)</option>
-          <option>Busbar Spool(4*4)mm</option><option>Busbar Spool(4*6)mm</option>
+          <option>Busbar Spool(4*4)mm</option><option>Busbar Spool(4*5)mm</option><option>Busbar Spool(4*6)mm</option>
           <option>RFID</option><option>Cell Fixation Tap</option>
           <option>G2G Tap</option><option>Tefflon Roll</option>
           <option>Aluminium Frame</option><option>RTV Drum</option>
@@ -1141,7 +1139,7 @@ tr:hover td { background:rgba(255,255,255,0.02); }
             <option>Front POE</option><option>Back POE</option>
             <option>Back EPE</option><option>Back EVA</option>
             <option>Ribbon Spool(0.24mm)</option><option>Ribbon Spool(0.26mm)</option>
-            <option>Busbar Spool(4*4)mm</option><option>Busbar Spool(4*6)mm</option>
+            <option>Busbar Spool(4*4)mm</option><option>Busbar Spool(4*5)mm</option><option>Busbar Spool(4*6)mm</option>
             <option>RFID</option><option>Cell Fixation Tape</option>
             <option>G2G Tape</option><option>Teflon Roll</option>
             <option>Aluminium Frame</option><option>RTV Drum</option>
@@ -1224,9 +1222,18 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
       </div>
 
+      <!-- Remarks — always visible -->
+      <div class="card" style="padding:14px 16px;margin-bottom:0;">
+        <div class="field">
+          <label>Remarks <span style="color:var(--text3)">(Optional)</span></label>
+          <input type="text" id="outRemarks" placeholder="Any notes about scan out..."
+            onkeydown="if(event.key==='Enter'&&!document.getElementById('outSubmitBtn').disabled)submitScanOut()">
+        </div>
+      </div>
+
       <!-- Pallet Details Card -->
       <div id="outPalletDetails" style="display:none;">
-        <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:14px;border:1px solid var(--border);">
+        <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:14px;border:1px solid var(--border);margin-top:12px;">
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-family:var(--mono);">Pallet Details</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div>
@@ -1485,7 +1492,8 @@ document.addEventListener('keydown', function(event) {
   const activeId  = document.activeElement ? document.activeElement.id : '';
   const activeTag = document.activeElement ? document.activeElement.tagName : '';
   if (activeId === 'outPalletInput') return; // already handled by handleOutScannerKeydown
-  if (activeTag === 'BUTTON' && event.key !== 'Enter') return;
+  if (activeId === 'outRemarks') return;      // allow typing in remarks field
+  if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return; // allow typing in any input
 
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -1723,7 +1731,8 @@ async function submitScanOut() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Processing...';
 
-  const res = await callAPI('scanOut', { palletNumber });
+  const outRemarks = (document.getElementById('outRemarks')?.value || '').trim();
+  const res = await callAPI('scanOut', { palletNumber, remarks: outRemarks });
 
   btn.disabled = false;
   btn.textContent = '✓ Confirm Scan Out — Mark as Finished';
@@ -1774,6 +1783,8 @@ function resetScanOut() {
   }
   const details = document.getElementById('outPalletDetails');
   if (details) details.style.display = 'none';
+  const outRem = document.getElementById('outRemarks');
+  if (outRem) outRem.value = '';
   const hint = document.getElementById('outScanHint');
   if (hint) hint.textContent = '👆 Tap box to activate USB scanner · 📷 for camera scan';
   hideOutAlerts();
@@ -1894,7 +1905,7 @@ function renderSATable() {
   const MATERIALS = [
     'Front Glass','Back Glass','Front EPE','Front EVA','Front POE',
     'Back POE','Back EPE','Back EVA','Ribbon Spool(0.24mm)','Ribbon Spool(0.26mm)',
-    'Busbar Spool(4*4)mm','Busbar Spool(4*6)mm','RFID','Cell Fixation Tape',
+    'Busbar Spool(4*4)mm','Busbar Spool(4*5)mm','Busbar Spool(4*6)mm','RFID','Cell Fixation Tape',
     'G2G Tape','Teflon Roll','Aluminium Frame','RTV Drum',
     'Part A','Part B','Corner','JB Cap','JB',
     'EVA Patch Roll','Back Label','Blank Barcode Roll'
@@ -2490,6 +2501,129 @@ function getMockData(action, data) {
 }
 
 /* ════ LOAD POs ════ */
+/* ════ PO SEARCH DROPDOWN (Scan In) ════ */
+const ALL_MATERIALS = [
+  'Front Glass','Back Glass','Front EPE','Front EVA','Front POE',
+  'Back POE','Back EPE','Back EVA','Ribbon Spool(0.24mm)','Ribbon Spool(0.26mm)',
+  'Busbar Spool(4*4)mm','Busbar Spool(4*5)mm','Busbar Spool(4*6)mm',
+  'RFID','Cell Fixation Tape','G2G Tape','Teflon Roll',
+  'Aluminium Frame','RTV Drum','Part A','Part B','Corner','JB Cap','JB',
+  'EVA Patch Roll','Back Label','Blank Barcode Roll'
+];
+
+function onPOSearchInput() {
+  const q = document.getElementById('poSearchInput').value.trim().toLowerCase();
+  document.getElementById('scanPoSelect').value = '';
+  renderPOSearchItems(q);
+  document.getElementById('poSearchList').style.display = 'block';
+  // Clear line code when PO cleared
+  if (!q) document.getElementById('scanLineCode').value = '';
+}
+
+function showPOSearchDropdown() {
+  renderPOSearchItems(document.getElementById('poSearchInput').value.trim().toLowerCase());
+  document.getElementById('poSearchList').style.display = 'block';
+}
+
+function hidePOSearchDropdown() {
+  setTimeout(() => {
+    document.getElementById('poSearchList').style.display = 'none';
+  }, 200);
+}
+
+function renderPOSearchItems(query) {
+  const items = document.getElementById('poSearchItems');
+  const openPOs = allPOs.filter(p => p.status === 'Open');
+  const filtered = query
+    ? openPOs.filter(p => p.poNumber.toLowerCase().includes(query) || p.lineCode.toLowerCase().includes(query))
+    : openPOs;
+
+  let html = '<div onmousedown="event.preventDefault()" onclick="selectPOSearch(\'\')"'
+    + ' style="padding:8px 12px;font-size:12px;color:var(--text3);cursor:pointer;border-bottom:.5px solid var(--border);"'
+    + ' onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">— Select PO —</div>';
+
+  if (!filtered.length) {
+    html += '<div style="padding:8px 12px;font-size:12px;color:var(--text3);">No POs found</div>';
+  } else {
+    filtered.forEach(po => {
+      const hl = query
+        ? po.poNumber.replace(new RegExp('(' + query + ')', 'gi'), '<strong style="color:var(--accent)">$1</strong>')
+        : po.poNumber;
+      html += '<div onmousedown="event.preventDefault()" onclick="selectPOSearch(\'' + po.poNumber + '\')"'
+        + ' style="padding:8px 12px;font-size:12px;color:var(--text);cursor:pointer;font-family:var(--mono);"'
+        + ' onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'"><div>' + hl + '</div>'
+        + '<div style="font-size:10px;color:var(--text3);">' + po.lineCode + '</div></div>';
+    });
+  }
+  items.innerHTML = html;
+}
+
+function selectPOSearch(poNumber) {
+  document.getElementById('poSearchInput').value  = poNumber;
+  document.getElementById('scanPoSelect').value   = poNumber;
+  document.getElementById('poSearchList').style.display = 'none';
+  // Trigger PO selected logic
+  const po = allPOs.find(p => p.poNumber === poNumber);
+  if (po) {
+    document.getElementById('scanLineCode').value = po.lineCode;
+  } else {
+    document.getElementById('scanLineCode').value = '';
+  }
+  hideAlerts('scan');
+}
+
+/* ════ MATERIAL SEARCH DROPDOWN (Scan In) ════ */
+function onMatSearchInput() {
+  const q = document.getElementById('matSearchInput').value.trim().toLowerCase();
+  document.getElementById('scanMaterialType').value = '';
+  renderMatSearchItems(q);
+  document.getElementById('matSearchList').style.display = 'block';
+}
+
+function showMatSearchDropdown() {
+  renderMatSearchItems(document.getElementById('matSearchInput').value.trim().toLowerCase());
+  document.getElementById('matSearchList').style.display = 'block';
+}
+
+function hideMatSearchDropdown() {
+  setTimeout(() => {
+    document.getElementById('matSearchList').style.display = 'none';
+  }, 200);
+}
+
+function renderMatSearchItems(query) {
+  const items = document.getElementById('matSearchItems');
+  const filtered = query
+    ? ALL_MATERIALS.filter(m => m.toLowerCase().includes(query))
+    : ALL_MATERIALS;
+
+  let html = '<div onmousedown="event.preventDefault()" onclick="selectMatSearch(\'\')"'
+    + ' style="padding:8px 12px;font-size:12px;color:var(--text3);cursor:pointer;border-bottom:.5px solid var(--border);"'
+    + ' onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">— Select Material —</div>';
+
+  if (!filtered.length) {
+    html += '<div style="padding:8px 12px;font-size:12px;color:var(--text3);">No materials found</div>';
+  } else {
+    filtered.forEach(mat => {
+      const hl = query
+        ? mat.replace(new RegExp('(' + query + ')', 'gi'), '<strong style="color:var(--accent)">$1</strong>')
+        : mat;
+      html += '<div onmousedown="event.preventDefault()" onclick="selectMatSearch(\'' + mat.replace(/'/g, "\\'") + '\')"'
+        + ' style="padding:8px 12px;font-size:12px;color:var(--text);cursor:pointer;"'
+        + ' onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'"><div>' + hl + '</div></div>';
+    });
+  }
+  items.innerHTML = html;
+}
+
+function selectMatSearch(mat) {
+  document.getElementById('matSearchInput').value    = mat;
+  document.getElementById('scanMaterialType').value  = mat;
+  document.getElementById('matSearchList').style.display = 'none';
+  // Trigger material selected logic
+  onMaterialSelected();
+}
+
 async function loadPOs() {
   const res = await callAPI('getPOs');
   if (res.success) {
@@ -2500,16 +2634,13 @@ async function loadPOs() {
 }
 
 function renderPODropdown() {
-  const sel = document.getElementById('scanPoSelect');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">— Select PO —</option>';
-  allPOs.filter(p => p.status === 'Open').forEach(po => {
-    const opt = document.createElement('option');
-    opt.value = po.poNumber;
-    opt.textContent = `${po.poNumber} · ${po.lineCode}`;
-    if (po.poNumber === current) opt.selected = true;
-    sel.appendChild(opt);
-  });
+  // With new search UI — just pre-render items for search
+  renderPOSearchItems('');
+  // Also keep hidden input value if already selected
+  const current = document.getElementById('scanPoSelect').value;
+  if (current) {
+    document.getElementById('poSearchInput').value = current;
+  }
 }
 
 function renderPOTable() {
@@ -2591,6 +2722,7 @@ const MATERIAL_UNITS = {
   'Ribbon Spool(0.24mm)':   'kg',
   'Ribbon Spool(0.26mm)':   'kg',
   'Busbar Spool(4*4)mm':    'kg',
+  'Busbar Spool(4*5)mm':    'kg',
   'Busbar Spool(4*6)mm':    'kg',
   'RFID':                   'nos',
   'Cell Fixation Tape':     'nos',
@@ -3002,7 +3134,7 @@ document.addEventListener('keydown', function(event) {
   const activeId = document.activeElement ? document.activeElement.id : '';
 
   // Allow normal typing in qty, remarks, name, PO select etc.
-  const nonScannerFields = ['palletQty','palletRemarks','inchargeName','scanPoSelect','scanMaterialType','shiftA','shiftB','shiftC'];
+  const nonScannerFields = ['palletQty','palletRemarks','inchargeName','scanPoSelect','scanMaterialType','shiftA','shiftB','shiftC','poSearchInput','matSearchInput','outRemarks'];
   if (nonScannerFields.includes(activeId)) return;
   if (tag === 'SELECT' || tag === 'TEXTAREA') return;
   if (activeId === 'palletInput') return; // already handled by handleScannerKeydown
@@ -3385,12 +3517,10 @@ async function switchCamera() {
 
 /* ════ CLEAR FORM ════ */
 function clearScanForm() {
-  // Only clear pallet-specific fields — keep PO/shift/name/material sticky
   document.getElementById('palletInput').value = '';
   document.getElementById('palletQty').value = '';
   document.getElementById('palletRemarks').value = '';
   hideAlerts('scan');
-  document.getElementById('palletInput').focus();
   // Re-apply unit from current material selection
   onMaterialSelected();
 }
@@ -3543,7 +3673,7 @@ function renderRecords(records) {
 
   let html = `<div class="table-wrap"><table><thead><tr>
     <th style="width:40px;text-align:center;">#</th>
-    <th>Status</th><th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th><th>Photo</th><th>Scan In Time</th><th>Scan Out Time</th>
+    <th>Status</th><th>Pallet #</th><th>PO Number</th><th>Line</th><th>Material</th><th>Shift</th><th>In-charge</th><th>Qty</th><th>Photo</th><th>Scan In Time</th><th>Scan Out Time</th><th>Scan Out Remarks</th>
   </tr></thead><tbody>`;
 
   pageRecords.forEach((r, idx) => {
@@ -3569,6 +3699,7 @@ function renderRecords(records) {
       ${imgCell}
       <td style="font-size:11px;color:var(--text3)">${r.scannedOn}</td>
       <td style="font-size:11px;color:#C0392B;">${r.scanOutTime || '—'}</td>
+      <td style="font-size:11px;color:var(--text2);">${r.scanOutRemarks || '—'}</td>
     </tr>`;
   });
 
@@ -3664,11 +3795,11 @@ function exportCSV() {
   const mat = document.getElementById('filterMaterial').value;
   let data = allRecords.filter(r => (!line || r.lineCode === line) && (!mat || r.materialType === mat));
 
-  let csv = 'Status,Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Photo,Scan In Time,Scan Out Time\n';
+  let csv = 'Status,Pallet Number,PO Number,Line Code,Material Type,Shift,In-charge,Pallet Qty,Remarks,Photo,Scan In Time,Scan Out Time,Scan Out Remarks\n';
   data.forEach(r => {
     const status = (r.scanOutTime && r.scanOutTime.length > 0) ? 'Finished' : 'In Stock';
     const photoLink = r.imageLink || r.imageData || '';
-    csv += `"${status}","${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${photoLink}","${r.scannedOn}","${r.scanOutTime||''}"\n`;
+    csv += `"${status}","${r.palletNumber}","${r.poNumber}","${r.lineCode}","${r.materialType}","${r.shift||''}","${r.incharge||''}","${r.palletQty||''}","${r.remarks||''}","${photoLink}","${r.scannedOn}","${r.scanOutTime||''}","${r.scanOutRemarks||''}"\n`;
   });
   const blob = new Blob([csv], { type:'text/csv' });
   const a = document.createElement('a');
