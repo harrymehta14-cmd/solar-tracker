@@ -1755,7 +1755,7 @@ async function submitScanOut() {
 
     // Update in allRecords
     const rec = allRecords.find(r => r.palletNumber === palletNumber);
-    if (rec) rec.scanOutTime = new Date().toLocaleString();
+    if (rec) rec.scanOutTime = res.scanOutTime || new Date().toLocaleString();
 
     // Reset for next scan after 2 seconds
     setTimeout(() => {
