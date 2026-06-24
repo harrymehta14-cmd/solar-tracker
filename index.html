@@ -1062,8 +1062,10 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
         <input type="text" id="filterSearch" placeholder="Search pallet / name..." oninput="filterRecords()" style="flex:1;min-width:140px;">
         <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
+        <button class="btn btn-secondary btn-sm" onclick="loadRecords(true)">↻ Refresh</button>
         <button class="btn btn-green btn-sm" onclick="exportCSV()">↓ Export CSV</button>
       </div>
+      <div id="recordsInfo" style="display:none;background:rgba(26,122,46,0.08);border:1px solid rgba(26,122,46,0.2);border-radius:8px;padding:8px 14px;margin-bottom:10px;font-size:12px;color:var(--text2);"></div>
       <div id="recordsWrap">
         <div class="empty-state">
           <div class="empty-state-icon">◫</div>
@@ -1657,73 +1659,50 @@ function handleOutScannerKeydown(event) {
   }
 }
 
+let isOutSubmitting = false; // prevent double submission
+
 async function fetchPalletForScanOut(palletNumber) {
   hideOutAlerts();
   const outBtn = document.getElementById('outSubmitBtn');
-  if (outBtn) outBtn.disabled = true;
+  if (outBtn) outBtn.disabled = false;
+  document.getElementById('outPalletDetails').style.display = 'none';
+  document.getElementById('outScanHint').textContent = '✓ Barcode scanned — click Confirm to scan out';
 
-  // Show loading state
-  document.getElementById('outScanHint').textContent = '⌛ Searching for pallet...';
+  // Show pallet number in display and enable submit button immediately
+  // No pre-fetch needed — submit will validate on server side
+  document.getElementById('outPalletDisplay').value = palletNumber;
+  document.getElementById('outPalletDisplay').style.color = '#C0392B';
 
-  // Search in allRecords first (already loaded)
-  let rec = allRecords.find(r => r.palletNumber === palletNumber);
-
-  if (!rec) {
-    // Try fetching fresh from API — in case new scans happened
-    const res = await callAPI('getRecords');
-    if (res.success) {
-      allRecords = res.data || [];
-      rec = allRecords.find(r => r.palletNumber === palletNumber);
-    }
-  }
-
-  if (!rec) {
-    // Clear display field to force rescan
-    document.getElementById('outPalletDisplay').value = '';
-    document.getElementById('outPalletDisplay').style.color = '#C0392B';
-    document.getElementById('outPalletDisplay').style.borderColor = '#C0392B';
-    document.getElementById('outPalletDetails').style.display = 'none';
-    document.getElementById('outScanHint').textContent = '❌ Not found — scan a different pallet';
-    showOutAlert('outError',
-      `⛔ Pallet number "${palletNumber}" does not exist in Scan In list.\n` +
-      `Please verify the pallet was scanned in first before scanning out.`
-    );
-    // Refocus scanner for next scan attempt
-    setTimeout(() => focusOutScanner(), 500);
-    return;
-  }
-
-  // Check if already scanned out
-  if (rec.scanOutTime) {
-    showOutAlert('outWarn', `⚠ Pallet "${palletNumber}" already scanned out at ${rec.scanOutTime}. Status: Finished.`);
-  }
-
-  // Show pallet details
-  document.getElementById('outPONumber').textContent     = rec.poNumber || '—';
-  document.getElementById('outMaterialType').textContent = rec.materialType || '—';
-  document.getElementById('outQty').textContent          = rec.palletQty ? rec.palletQty + ' ' + (MATERIAL_UNITS[rec.materialType] || '') : '—';
-  document.getElementById('outLineCode').textContent     = rec.lineCode || '—';
-  document.getElementById('outInTime').textContent       = rec.scannedOn || '—';
-
-  const statusEl = document.getElementById('outStatus');
-  if (rec.scanOutTime) {
-    statusEl.textContent = 'Finished';
-    statusEl.style.color = '#888';
-    if (outBtn) outBtn.disabled = true;
-    if (outBtn) outBtn.textContent = '✓ Already Finished';
-  } else {
-    statusEl.textContent = 'In Stock';
-    statusEl.style.color = '#1A7A2E';
-    if (outBtn) { outBtn.disabled = false; outBtn.textContent = '✓ Confirm Scan Out — Mark as Finished'; }
-  }
-
+  // Show minimal details card with just pallet number
+  document.getElementById('outPONumber').textContent     = '—';
+  document.getElementById('outMaterialType').textContent = '—';
+  document.getElementById('outQty').textContent          = '—';
+  document.getElementById('outLineCode').textContent     = '—';
+  document.getElementById('outInTime').textContent       = '—';
+  document.getElementById('outStatus').textContent       = 'Ready to scan out';
+  document.getElementById('outStatus').style.color       = '#1A7A2E';
   document.getElementById('outPalletDetails').style.display = 'block';
+
+  if (outBtn) {
+    outBtn.disabled    = false;
+    outBtn.textContent = '✓ Confirm Scan Out — Mark as Finished';
+  }
+
+  // Auto submit on Enter key from scanner
+  document.getElementById('outRemarks').focus();
+  setTimeout(() => {
+    document.getElementById('outSubmitBtn').focus();
+  }, 100);
 }
 
 async function submitScanOut() {
+  if (isOutSubmitting) return;
+  isOutSubmitting = true;
+
   const palletNumber = document.getElementById('outPalletInput').value.trim();
   if (!palletNumber) {
     showOutAlert('outError', 'Please scan a pallet barcode first.');
+    isOutSubmitting = false;
     return;
   }
 
@@ -1734,37 +1713,52 @@ async function submitScanOut() {
   const outRemarks = (document.getElementById('outRemarks')?.value || '').trim();
   const res = await callAPI('scanOut', { palletNumber, remarks: outRemarks });
 
+  isOutSubmitting = false;
   btn.disabled = false;
   btn.textContent = '✓ Confirm Scan Out — Mark as Finished';
 
   if (res.success) {
     outSessionScans++;
     document.getElementById('outSessionCount').textContent = outSessionScans;
-    showOutAlert('outSuccess', `✓ Pallet "${palletNumber}" scanned out — Status: Finished`);
+
+    // Flash success
+    const flash = document.getElementById('scanFlash');
+    if (flash) { flash.style.display = 'block'; setTimeout(() => flash.style.display = 'none', 500); }
+
+    showOutAlert('outSuccess', `✓ Pallet "${palletNumber}" scanned out successfully!`);
+
+    // Update details from response
+    if (res.data) {
+      document.getElementById('outPONumber').textContent     = res.data.poNumber     || '—';
+      document.getElementById('outMaterialType').textContent = res.data.materialType  || '—';
+      document.getElementById('outQty').textContent          = res.data.palletQty     || '—';
+      document.getElementById('outLineCode').textContent     = res.data.lineCode      || '—';
+      document.getElementById('outInTime').textContent       = res.data.scannedOn     || '—';
+    }
+    document.getElementById('outStatus').textContent = 'Finished ✓';
+    document.getElementById('outStatus').style.color = '#888';
+    btn.disabled = true;
+    btn.textContent = '✓ Finished';
 
     // Add to recent scan out list
     addOutRecentScan(palletNumber,
       document.getElementById('outMaterialType').textContent,
       document.getElementById('outPONumber').textContent);
 
-    // Update status display
-    document.getElementById('outStatus').textContent = 'Finished';
-    document.getElementById('outStatus').style.color = '#888';
-    btn.disabled = true;
-    btn.textContent = '✓ Already Finished';
-
-    // Update in allRecords
+    // Update local cache
     const rec = allRecords.find(r => r.palletNumber === palletNumber);
-    if (rec) rec.scanOutTime = res.scanOutTime || new Date().toLocaleString();
+    if (rec) rec.scanOutTime = res.scanOutTime || '';
 
-    // Reset for next scan after 2 seconds
+    // Auto reset after 2 seconds — ready for next scan
     setTimeout(() => {
       resetScanOut();
       focusOutScanner();
-    }, 2500);
+    }, 2000);
 
   } else {
     showOutAlert('outError', res.error || 'Scan out failed. Please try again.');
+    // Refocus scanner for retry
+    setTimeout(() => focusOutScanner(), 500);
   }
 }
 
@@ -2177,7 +2171,7 @@ function showScreen(name) {
     else setTimeout(() => document.getElementById('saPwInput')?.focus(), 200);
   }
   if (name === 'po')        loadPOs();
-  if (name === 'records')   loadRecords();
+  if (name === 'records')   loadRecords(false); // use cache if available
   if (name === 'dashboard') loadDashboard();
 }
 
@@ -3526,19 +3520,72 @@ function clearScanForm() {
 }
 
 /* ════ LOAD RECORDS ════ */
-async function loadRecords() {
+/* Records cache — avoid reloading on every tab switch */
+let recordsLastLoaded = 0;
+const RECORDS_CACHE_MS = 60000; // 1 minute cache
+
+async function loadRecords(forceRefresh = false) {
+  const now = Date.now();
+
+  // Use cache if loaded within last 1 minute and not forced
+  if (!forceRefresh && allRecords.length > 0 && (now - recordsLastLoaded) < RECORDS_CACHE_MS) {
+    filterRecords();
+    return;
+  }
+
+  // Show loading indicator
+  const wrap = document.getElementById('recordsWrap');
+  if (wrap) wrap.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-state-icon">⏳</div>
+      <div class="empty-state-text">Loading records... please wait</div>
+    </div>`;
+
   const res = await callAPI('getRecords');
   if (res.success) {
     allRecords = res.data || [];
+    recordsLastLoaded = Date.now();
+
+    // Show info if more records exist
+    const total   = res.total || allRecords.length;
+    const fetched = res.fetched || allRecords.length;
+    const infoEl  = document.getElementById('recordsInfo');
+    if (infoEl) {
+      if (total > fetched) {
+        infoEl.innerHTML = `⚡ Showing latest <strong>${fetched}</strong> of <strong>${total}</strong> total records for faster loading. <a href="#" onclick="loadAllRecords();return false;" style="color:var(--accent);">Load all ${total} records</a>`;
+        infoEl.style.display = 'block';
+      } else {
+        infoEl.style.display = 'none';
+      }
+    }
 
     // Populate PO search dropdown with unique PO numbers
     allPONumbers = [...new Set(allRecords.map(r => r.poNumber).filter(Boolean))].sort();
-    renderPODropdownItems(''); // pre-render all items
+    renderPODropdownItems('');
 
-    // Also populate old hidden filterPO for compatibility
     const filterPO = document.getElementById('filterPO');
     if (filterPO) filterPO.value = '';
 
+    filterRecords();
+  } else {
+    if (wrap) wrap.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">❌</div>
+        <div class="empty-state-text">Failed to load records. <a href="#" onclick="loadRecords(true);return false;" style="color:var(--accent)">Try again</a></div>
+      </div>`;
+  }
+}
+
+async function loadAllRecords() {
+  const infoEl = document.getElementById('recordsInfo');
+  if (infoEl) infoEl.innerHTML = '⏳ Loading all records...';
+  const res = await callAPI('getRecords', { limit: 10000 });
+  if (res.success) {
+    allRecords = res.data || [];
+    recordsLastLoaded = Date.now();
+    allPONumbers = [...new Set(allRecords.map(r => r.poNumber).filter(Boolean))].sort();
+    renderPODropdownItems('');
+    if (infoEl) infoEl.style.display = 'none';
     filterRecords();
   }
 }
