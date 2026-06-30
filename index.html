@@ -641,8 +641,8 @@ tr:hover td { background:rgba(255,255,255,0.02); }
 
 <div id="loginOverlay">
   <div class="login-box">
-    <div class="login-title">Admin Login</div>
-    <div class="login-sub">Enter admin password to manage POs</div>
+    <div class="login-title" id="loginOverlayTitle">Admin Login</div>
+    <div class="login-sub" id="loginOverlaySub">Enter admin password to manage POs</div>
     <div class="field" style="margin-bottom:14px;">
       <label>Password</label>
       <input type="password" id="adminPwInput" placeholder="Enter admin password"
@@ -983,6 +983,10 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         <span>All Production Orders</span>
         <button class="btn btn-secondary btn-sm" onclick="loadPOs()">↻ Refresh</button>
       </div>
+      <div style="margin-bottom:14px;">
+        <input type="text" id="poMgmtSearch" placeholder="🔍 Search PO number, line or material..."
+          oninput="filterPOMgmtTable()" style="width:100%;">
+      </div>
       <div id="poListWrap">
         <div class="empty-state">
           <div class="empty-state-icon">≡</div>
@@ -1187,6 +1191,15 @@ tr:hover td { background:rgba(255,255,255,0.02); }
       <div class="section-sub">Scan pallet barcode to mark material as consumed on line</div>
     </div>
 
+    <!-- Scan Out Lock — shown when not authenticated -->
+    <div class="alert alert-warn" id="scanoutLockWarn" style="display:flex;">
+      <span class="alert-icon">🔒</span>
+      <span>Login with Scan Out password to scan out material. <a href="#" onclick="requireScanOutAuth();return false;" style="color:var(--accent);">Login to Scan Out →</a></span>
+    </div>
+
+    <!-- Scan Out content — hidden until authenticated -->
+    <div id="scanoutContent" style="display:none;">
+
     <div class="card">
       <div class="card-title">01 — Scan Pallet to Consume</div>
       <div class="field" style="margin-bottom:10px;">
@@ -1298,6 +1311,8 @@ tr:hover td { background:rgba(255,255,255,0.02); }
         </div>
       </div>
     </div>
+
+    </div><!-- /scanoutContent -->
   </div>
 
   <!-- ╔══════════════════════════════════╗ -->
@@ -1447,7 +1462,9 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbze8wrrqQd5z0Dch1gAK
 
 /* ════ APP STATE ════ */
 const ADMIN_PASSWORD = 'admin123'; // Change this!
+const SCANOUT_PASSWORD = 'scanout123'; // Change this! Separate password for Scan Out tab
 let isAdmin = false;
+let isScanOutAuth = false;
 let selectedShift = ''; // A, B or C
 let allPOs = [];
 let allRecords = [];
@@ -2160,9 +2177,17 @@ function showScreen(name) {
     scannerActive = false;
   }
   if (name === 'scanout') {
-    outScannerActive = true;
-    resetScanOut();
-    setTimeout(() => focusOutScanner(), 300);
+    if (isScanOutAuth) {
+      document.getElementById('scanoutLockWarn').style.display = 'none';
+      document.getElementById('scanoutContent').style.display = 'block';
+      outScannerActive = true;
+      resetScanOut();
+      setTimeout(() => focusOutScanner(), 300);
+    } else {
+      document.getElementById('scanoutLockWarn').style.display = 'flex';
+      document.getElementById('scanoutContent').style.display = 'none';
+      outScannerActive = false;
+    }
   } else {
     outScannerActive = false;
   }
@@ -2175,14 +2200,50 @@ function showScreen(name) {
   if (name === 'dashboard') loadDashboard();
 }
 
-/* ════ ADMIN AUTH ════ */
+/* ════ ADMIN AUTH (PO Mgmt) ════ */
+let loginPurpose = 'admin'; // 'admin' or 'scanout' — tracks which login is active
+
 function requireAdmin() {
   if (isAdmin) return;
+  loginPurpose = 'admin';
   document.getElementById('loginOverlay').classList.add('show');
+  document.getElementById('loginOverlayTitle').textContent = 'Admin Login';
+  document.getElementById('loginOverlaySub').textContent = 'Enter admin password to manage POs';
   setTimeout(() => document.getElementById('adminPwInput').focus(), 100);
 }
+
+function requireScanOutAuth() {
+  if (isScanOutAuth) return;
+  loginPurpose = 'scanout';
+  document.getElementById('loginOverlay').classList.add('show');
+  document.getElementById('loginOverlayTitle').textContent = 'Scan Out Login';
+  document.getElementById('loginOverlaySub').textContent = 'Enter Scan Out password to consume material';
+  setTimeout(() => document.getElementById('adminPwInput').focus(), 100);
+}
+
 function doAdminLogin() {
   const pw = document.getElementById('adminPwInput').value;
+
+  if (loginPurpose === 'scanout') {
+    if (pw === SCANOUT_PASSWORD) {
+      isScanOutAuth = true;
+      document.getElementById('loginOverlay').classList.remove('show');
+      document.getElementById('scanoutLockWarn').style.display = 'none';
+      document.getElementById('scanoutContent').style.display = 'block';
+      document.getElementById('adminPwInput').value = '';
+      document.getElementById('loginError').classList.remove('show');
+      outScannerActive = true;
+      resetScanOut();
+      setTimeout(() => focusOutScanner(), 300);
+    } else {
+      document.getElementById('loginError').classList.add('show');
+      document.getElementById('adminPwInput').value = '';
+      document.getElementById('adminPwInput').focus();
+    }
+    return;
+  }
+
+  // Default — admin login for PO Mgmt
   if (pw === ADMIN_PASSWORD) {
     isAdmin = true;
     document.getElementById('loginOverlay').classList.remove('show');
@@ -2637,14 +2698,26 @@ function renderPODropdown() {
   }
 }
 
+let poMgmtFiltered = []; // currently filtered PO list for display
+
 function renderPOTable() {
   const wrap = document.getElementById('poListWrap');
-  if (!allPOs.length) {
-    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">≡</div><div class="empty-state-text">No POs found</div></div>';
+  const query = (document.getElementById('poMgmtSearch')?.value || '').trim().toLowerCase();
+
+  poMgmtFiltered = query
+    ? allPOs.filter(po =>
+        po.poNumber.toLowerCase().includes(query) ||
+        po.lineCode.toLowerCase().includes(query) ||
+        (po.materialType || '').toLowerCase().includes(query))
+    : allPOs;
+
+  if (!poMgmtFiltered.length) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">≡</div><div class="empty-state-text">' +
+      (query ? 'No POs match "' + query + '"' : 'No POs found') + '</div></div>';
     return;
   }
   let html = '<div class="table-wrap"><table><thead><tr><th>PO Number</th><th>Line</th><th>PO Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>';
-  allPOs.forEach(po => {
+  poMgmtFiltered.forEach(po => {
     const isAdmin_ = isAdmin;
     html += `<tr>
       <td style="font-family:var(--mono);font-weight:500;color:var(--text)">${po.poNumber}</td>
@@ -2656,6 +2729,10 @@ function renderPOTable() {
   });
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
+}
+
+function filterPOMgmtTable() {
+  renderPOTable();
 }
 
 /* ════ ADD PO ════ */
